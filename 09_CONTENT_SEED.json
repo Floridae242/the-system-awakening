@@ -1,0 +1,81 @@
+{
+  "content_version": "1.0.0",
+  "quests": [
+    {
+      "id": "quest_focus_001",
+      "version": 1,
+      "title": "Trial of Focus",
+      "category": "study",
+      "difficulty": "NORMAL",
+      "primary_stat": "INT",
+      "objective": {"type": "duration_minutes", "target": 30},
+      "verification": {"accepted_evidence": ["image", "manual"]},
+      "reward_profile": "normal_v1",
+      "status": "active"
+    },
+    {
+      "id": "quest_run_001",
+      "version": 1,
+      "title": "Road of Momentum",
+      "category": "running",
+      "difficulty": "NORMAL",
+      "primary_stat": "AGI",
+      "objective": {"type": "distance_km", "target": 3},
+      "verification": {"accepted_evidence": ["image", "manual"]},
+      "reward_profile": "normal_v1",
+      "status": "active"
+    },
+    {
+      "id": "quest_code_001",
+      "version": 1,
+      "title": "Forge of Logic",
+      "category": "coding",
+      "difficulty": "HARD",
+      "primary_stat": "INT",
+      "objective": {"type": "completion", "target": "Implement one working feature and provide evidence"},
+      "verification": {"accepted_evidence": ["image", "manual"]},
+      "reward_profile": "hard_v1",
+      "status": "active"
+    },
+    {
+      "id": "quest_journal_001",
+      "version": 1,
+      "title": "Echoes of the Mind",
+      "category": "journal",
+      "difficulty": "EASY",
+      "primary_stat": "WIL",
+      "objective": {"type": "completion", "target": "Complete a journal entry"},
+      "verification": {"accepted_evidence": ["manual"]},
+      "reward_profile": "easy_v1",
+      "status": "active"
+    },
+    {
+      "id": "quest_endurance_001",
+      "version": 1,
+      "title": "Trial of Endurance",
+      "category": "fitness",
+      "difficulty": "HARD",
+      "primary_stat": "VIT",
+      "objective": {"type": "duration_minutes", "target": 45},
+      "verification": {"accepted_evidence": ["image", "manual"]},
+      "reward_profile": "hard_v1",
+      "status": "active"
+    }
+  ],
+  "items": [
+    {"id":"item_common_focus_band","version":1,"name":"Focus Band","rarity":"COMMON","type":"accessory","power":5,"status":"active"},
+    {"id":"item_uncommon_runner_charm","version":1,"name":"Runner Charm","rarity":"UNCOMMON","type":"charm","power":10,"status":"active"},
+    {"id":"item_rare_momentum_boots","version":1,"name":"Momentum Boots","rarity":"RARE","type":"boots","power":20,"status":"active"},
+    {"id":"item_epic_architect_mantle","version":1,"name":"Architect's Mantle","rarity":"EPIC","type":"mantle","power":35,"status":"active"},
+    {"id":"item_legendary_archive_halo","version":1,"name":"Archive Halo","rarity":"LEGENDARY","type":"artifact","power":60,"status":"active"},
+    {"id":"item_mythic_core_of_awakening","version":1,"name":"Core of Awakening","rarity":"MYTHIC","type":"artifact","power":100,"status":"active"}
+  ],
+  "loot_pools": {
+    "COMMON": ["item_common_focus_band"],
+    "UNCOMMON": ["item_uncommon_runner_charm"],
+    "RARE": ["item_rare_momentum_boots"],
+    "EPIC": ["item_epic_architect_mantle"],
+    "LEGENDARY": ["item_legendary_archive_halo"],
+    "MYTHIC": ["item_mythic_core_of_awakening"]
+  }
+}

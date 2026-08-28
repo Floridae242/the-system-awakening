@@ -1,0 +1,239 @@
+openapi: 3.2.0
+info:
+  title: The System Awakening API
+  version: 1.0.0
+servers:
+  - url: https://api.example.com/v1
+security:
+  - bearerAuth: []
+paths:
+  /player:
+    get:
+      operationId: getPlayer
+      responses:
+        '200':
+          description: Current player profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Player' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /quests:
+    get:
+      operationId: listQuests
+      responses:
+        '200':
+          description: Offered/active quests owned by current player
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PlayerQuest' }
+  /quests/{quest_id}/accept:
+    post:
+      operationId: acceptQuest
+      parameters:
+        - in: path
+          name: quest_id
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Accepted quest or existing accepted result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlayerQuest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /quests/{quest_id}/submissions:
+    post:
+      operationId: createSubmission
+      parameters:
+        - in: path
+          name: quest_id
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateSubmissionRequest' }
+      responses:
+        '202':
+          description: Submission accepted for verification
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Submission' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /submissions/{submission_id}:
+    get:
+      operationId: getSubmission
+      parameters:
+        - in: path
+          name: submission_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Submission and verification state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubmissionDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /rewards/{reward_id}:
+    get:
+      operationId: getReward
+      parameters:
+        - in: path
+          name: reward_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Authoritative reward grant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RewardGrant' }
+  /chests/{chest_id}/open:
+    post:
+      operationId: openChest
+      parameters:
+        - in: path
+          name: chest_id
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Persisted chest open result; repeated calls return same item
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChestOpenResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /inventory:
+    get:
+      operationId: getInventory
+      responses:
+        '200':
+          description: Current player's inventory
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/InventoryItem' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+  responses:
+    Unauthorized:
+      description: Authentication required
+    Forbidden:
+      description: Authenticated but not permitted to access this resource
+    NotFound:
+      description: Resource not found
+    Conflict:
+      description: Invalid state transition or conflicting request
+    BadRequest:
+      description: Invalid request
+  schemas:
+    Player:
+      type: object
+      required: [id, display_name, level, current_xp, stats, power]
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string }
+        level: { type: integer, minimum: 1 }
+        current_xp: { type: integer, minimum: 0 }
+        stats:
+          type: object
+          required: [str, agi, vit, int, wil]
+          properties:
+            str: { type: integer }
+            agi: { type: integer }
+            vit: { type: integer }
+            int: { type: integer }
+            wil: { type: integer }
+        power: { type: integer }
+    PlayerQuest:
+      type: object
+      required: [id, definition_id, title, category, difficulty, status, objective]
+      properties:
+        id: { type: string, format: uuid }
+        definition_id: { type: string }
+        title: { type: string }
+        category: { type: string }
+        difficulty: { type: string, enum: [EASY, NORMAL, HARD, ELITE, EXTREME] }
+        status: { type: string, enum: [OFFERED, ACCEPTED, SUBMITTED, VERIFYING, REJECTED, VERIFIED, COMPLETED] }
+        objective: { type: object, additionalProperties: true }
+    CreateSubmissionRequest:
+      oneOf:
+        - type: object
+          required: [evidence_type, upload_token]
+          properties:
+            evidence_type: { const: image }
+            upload_token: { type: string }
+        - type: object
+          required: [evidence_type, manual_evidence]
+          properties:
+            evidence_type: { const: manual }
+            manual_evidence: { type: object, additionalProperties: true }
+    Submission:
+      type: object
+      required: [id, player_quest_id, status]
+      properties:
+        id: { type: string, format: uuid }
+        player_quest_id: { type: string, format: uuid }
+        status: { type: string }
+    SubmissionDetail:
+      allOf:
+        - $ref: '#/components/schemas/Submission'
+        - type: object
+          properties:
+            verification: { $ref: '#/components/schemas/VerificationResult' }
+            reward: { $ref: '#/components/schemas/RewardGrant' }
+    VerificationResult:
+      type: object
+      properties:
+        schema_version: { type: string }
+        disposition: { type: string, enum: [PASS, REJECT, NEEDS_BETTER_EVIDENCE, ERROR] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        evidence_quality: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        risk_flags:
+          type: array
+          items: { type: string }
+        extracted_facts: { type: object, additionalProperties: true }
+    RewardGrant:
+      type: object
+      required: [id, exp_granted, stat_changes, chest_id, rules_version]
+      properties:
+        id: { type: string, format: uuid }
+        exp_granted: { type: integer }
+        stat_changes: { type: object, additionalProperties: { type: integer } }
+        chest_id: { type: string, format: uuid }
+        rules_version: { type: string }
+    ChestOpenResult:
+      type: object
+      required: [chest_id, item]
+      properties:
+        chest_id: { type: string, format: uuid }
+        item: { $ref: '#/components/schemas/InventoryItem' }
+    InventoryItem:
+      type: object
+      required: [id, definition_id, name, rarity, power]
+      properties:
+        id: { type: string, format: uuid }
+        definition_id: { type: string }
+        name: { type: string }
+        rarity: { type: string, enum: [COMMON, UNCOMMON, RARE, EPIC, LEGENDARY, MYTHIC] }
+        power: { type: integer }
