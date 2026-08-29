@@ -1,0 +1,23 @@
+{
+  "rules_version": "1.0.0",
+  "levels": [
+    { "total_exp": 0, "level": 1 },
+    { "total_exp": 99, "level": 1 },
+    { "total_exp": 100, "level": 2 },
+    { "total_exp": 354, "level": 2 },
+    { "total_exp": 355, "level": 3 }
+  ],
+  "rewards": [
+    { "difficulty": "NORMAL", "performance": "PASS", "streak_days": 0, "exp": 132, "stat_gain": 1 },
+    { "difficulty": "HARD", "performance": "EXCELLENT", "streak_days": 7, "exp": 297, "stat_gain": 2 }
+  ],
+  "rarity_rolls": [
+    { "roll": 0.0, "rarity": "COMMON" },
+    { "roll": 0.549999, "rarity": "COMMON" },
+    { "roll": 0.55, "rarity": "UNCOMMON" },
+    { "roll": 0.75, "rarity": "RARE" },
+    { "roll": 0.88, "rarity": "EPIC" },
+    { "roll": 0.95, "rarity": "LEGENDARY" },
+    { "roll": 0.99, "rarity": "MYTHIC" }
+  ]
+}

@@ -1,21 +1,42 @@
 import { describe, expect, it } from "vitest";
 import {
   levelFromExp,
+  calculateQuestReward,
+  chestRarityFromRoll,
+  xpRequiredForNextLevel,
   settleReward,
   rollLootTable,
   evaluateCriteria,
   validateRewardProfile,
   zeroStats,
 } from "../src/index.js";
+import vectors from "../../contracts/game-rules-v1.vectors.json";
 
 describe("game engine — deterministic rules", () => {
   it("calculates level from exp", () => {
-    expect(levelFromExp(0)).toBe(1);
-    expect(levelFromExp(99)).toBe(1);
-    expect(levelFromExp(100)).toBe(2);
-    expect(levelFromExp(399)).toBe(2);
-    expect(levelFromExp(400)).toBe(3);
+    for (const vector of vectors.levels) {
+      expect(levelFromExp(vector.total_exp)).toBe(vector.level);
+    }
+    expect(xpRequiredForNextLevel(1)).toBe(100);
+    expect(xpRequiredForNextLevel(2)).toBe(255);
     expect(() => levelFromExp(-1)).toThrow();
+  });
+
+  it("matches the normative reward vectors", () => {
+    for (const vector of vectors.rewards) {
+      expect(calculateQuestReward(vector.difficulty, vector.performance, vector.streak_days)).toEqual({
+        exp: vector.exp,
+        statGain: vector.stat_gain,
+      });
+    }
+  });
+
+  it("maps persisted server rolls to the Game Rules v1 rarity table", () => {
+    for (const vector of vectors.rarity_rolls) {
+      expect(chestRarityFromRoll(vector.roll)).toBe(vector.rarity);
+    }
+    expect(() => chestRarityFromRoll(1)).toThrow();
+    expect(() => chestRarityFromRoll(-0.01)).toThrow();
   });
 
   it("settles rewards deterministically", () => {
@@ -39,6 +60,8 @@ describe("game engine — deterministic rules", () => {
       entries: [{ itemId: "FOCUS_CHARM", itemVersion: 1, weight: 1 }],
     };
     expect(rollLootTable(table, () => 0.5)).toBe("FOCUS_CHARM");
+    expect(() => rollLootTable({ ...table, entries: [{ ...table.entries[0]!, weight: -1 }] }, () => 0.5)).toThrow();
+    expect(() => rollLootTable(table, () => 1)).toThrow();
   });
 
   it("evaluates quest criteria deterministically", () => {

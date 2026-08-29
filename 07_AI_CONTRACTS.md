@@ -24,35 +24,34 @@ No direct DB mutation tool.
 ### Output Schema
 ```json
 {
-  "schema_version": "verification-result-v1",
+  "schema_version": "verification-observation-v1",
   "submission_id": "uuid",
   "evidence_type": "image",
-  "extracted_facts": {},
-  "condition_results": [
+  "observations": [
     {
-      "condition_id": "distance_min",
-      "observed": 5.24,
-      "operator": ">=",
-      "required": 5,
-      "passed": true
+      "name": "distance_km",
+      "value": 5.24,
+      "unit": "km",
+      "source": "visible_activity_summary",
+      "confidence": 0.93
     }
   ],
-  "confidence": 0.93,
-  "evidence_quality": "HIGH",
-  "risk_flags": [],
-  "recommended_disposition": "PASS"
+  "evidence_quality": "SUFFICIENT",
+  "missing_observations": [],
+  "safety_flags": []
 }
 ```
 
-### recommended_disposition Enum
-PASS | REJECT | NEEDS_BETTER_EVIDENCE | ERROR
+The AI output contains observations and evidence quality only. The deterministic backend decision enum is:
+
+PASS | NEED_MORE_EVIDENCE | REVIEW | FAIL
 
 ### Backend Routing Policy
 - Schema invalid → reject output, one repair/retry.
 - AI timeout/provider error → one bounded retry.
 - Retry failure in demo environment → deterministic DEMO_MODE fixture.
 - Risk flags present → no automatic settlement unless explicitly allowed by backend policy.
-- NEEDS_BETTER_EVIDENCE → no progression mutation.
+- NEED_MORE_EVIDENCE → no progression mutation.
 - PASS only becomes successful verification after backend checks quest conditions.
 
 ### Confidence Policy

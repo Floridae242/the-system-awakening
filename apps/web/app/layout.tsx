@@ -1,11 +1,15 @@
-export const metadata = { title: "The System — Awakening" };
+import type { ReactNode } from "react";
+import "./globals.css";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const metadata = {
+  title: "The System — Awakening",
+  description: "Real actions become verifiable RPG progression.",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ background: "#090D13", color: "#F3F7FB", fontFamily: "system-ui, sans-serif", margin: 0, padding: 0 }}>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

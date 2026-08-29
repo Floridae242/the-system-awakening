@@ -34,7 +34,7 @@ Terminal/non-active states may include EXPIRED or CANCELLED, but they are not re
 CREATED
 → QUEUED
 → VERIFYING
-→ PASSED | REJECTED | NEEDS_BETTER_EVIDENCE | ERROR
+→ PASS | NEED_MORE_EVIDENCE | REVIEW | FAIL
 
 Rules:
 - Each submission belongs to one player quest.
@@ -64,7 +64,7 @@ VERIFYING → show retry-safe loading → bounded server retry → fallback.
 Do not mutate state. Validation failure → retry/repair → fallback.
 
 ### Low-Quality Evidence
-Return NEEDS_BETTER_EVIDENCE with user-readable reason and resubmit CTA.
+Return NEED_MORE_EVIDENCE with user-readable reason and resubmit CTA.
 
 ### Lost Network After Reward Settlement
 Client reloads authoritative profile/reward state. Server must not settle again.

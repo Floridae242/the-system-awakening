@@ -56,7 +56,7 @@ Golden dataset categories:
 
 Metrics:
 - schema validity
-- pass/reject agreement with labeled expected disposition
+- backend decision agreement with labeled PASS / NEED_MORE_EVIDENCE / REVIEW / FAIL
 - false positive rate
 - false negative rate
 - latency

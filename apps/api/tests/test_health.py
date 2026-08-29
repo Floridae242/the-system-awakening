@@ -1,10 +1,15 @@
-import pytest
 from fastapi.testclient import TestClient
+
 from main import app
 
-client = TestClient(app)
 
 def test_health():
-    r = client.get("/api/v1/health")
-    assert r.status_code == 200
-    assert r.json()["status"] == "ok"
+    with TestClient(app) as client:
+        response = client.get("/api/v1/health")
+        assert response.status_code == 200
+        assert response.json() == {
+            "status": "ok",
+            "service": "the-system-awakening-api",
+            "version": "0.1.0",
+            "database": "ok",
+        }

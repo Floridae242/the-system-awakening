@@ -10,9 +10,11 @@
     "dev:web": "npm run dev --workspace @tsa/web",
     "dev:api": "npm run dev --workspace @tsa/api",
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present && npm run test:api",
+    "test:api": "apps/api/.venv/bin/python -m pytest apps/api/tests --cov=apps/api/app --cov-report=term --cov-fail-under=80 -q",
+    "test:e2e": "playwright test",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present && apps/api/.venv/bin/ruff check apps/api",
     "verify": "npm run typecheck && npm run test && npm run build"
   },
   "keywords": [],
@@ -25,6 +27,7 @@
     "packages/*"
   ],
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   }

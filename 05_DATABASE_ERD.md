@@ -68,7 +68,7 @@ PostgreSQL is authoritative for durable player/game state.
 - provider text NOT NULL
 - model text NULL
 - prompt_version text NOT NULL
-- recommended_disposition text NOT NULL
+- decision text NOT NULL CHECK decision IN ('PASS','NEED_MORE_EVIDENCE','REVIEW','FAIL')
 - confidence numeric NULL
 - evidence_quality text NOT NULL
 - extracted_facts jsonb NOT NULL
