@@ -22,7 +22,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: "cd apps/web && NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api/v1 npx next build && npx next start -p 3000",
+      command: "cd apps/web && NEXT_PUBLIC_DEMO_MODE=true AWAKENING_API_INTERNAL_URL=http://127.0.0.1:8000/api/v1 npx next build && AWAKENING_API_INTERNAL_URL=http://127.0.0.1:8000/api/v1 npx next start -p 3000",
       url: "http://127.0.0.1:3000",
       reuseExistingServer: false,
       timeout: 120_000,

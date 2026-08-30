@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("real action to persisted inventory Core Loop", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("tab", { name: "Demo" }).click();
   await page.getByLabel("Demo hunter name").fill(`e2e-hunter-${Date.now()}`);
   await page.getByRole("button", { name: "ENTER THE SYSTEM" }).click();
 
@@ -36,6 +37,7 @@ test("real action to persisted inventory Core Loop", async ({ page }) => {
 
 test("completion quest accepts an explicit demo self-report", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("tab", { name: "Demo" }).click();
   await page.getByLabel("Demo hunter name").fill(`journal-e2e-${Date.now()}`);
   await page.getByRole("button", { name: "ENTER THE SYSTEM" }).click();
   await page.getByRole("button", { name: /Echoes of the Mind/ }).click();
