@@ -48,7 +48,9 @@ jobs:
       - name: PostgreSQL concurrency
         run: TEST_POSTGRES_URL=postgresql+asyncpg://awakening:awakening-ci@127.0.0.1:5432/awakening bash scripts/run-postgres-concurrency.sh
       - name: Build
-        run: npm run build
+        # The demo controls are compile-time public env in Next.js. Keep the
+        # E2E artifact deterministic even if job-level env handling changes.
+        run: NEXT_PUBLIC_DEMO_MODE=true npm run build
       - name: Start API and web for E2E
         run: |
           (apps/api/.venv/bin/uvicorn main:app --app-dir apps/api --host 127.0.0.1 --port 8000 > /tmp/awakening-api.log 2>&1 &)
