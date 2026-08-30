@@ -21,8 +21,7 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=20
     env:
       APP_ENV: test
-      DATABASE_URL: postgresql+asyncpg://awakening:awakening-ci@127.0.0.1:5432/awakening
-      TEST_POSTGRES_URL: postgresql+asyncpg://awakening:awakening-ci@127.0.0.1:5432/awakening
+      DATABASE_URL: sqlite+aiosqlite:///./ci-awakening.db
       JWT_SECRET: ci-only-secret-that-is-long-enough
       VERIFICATION_SERVICE_TOKEN: ci-only-verifier-token-that-is-long-enough
       DEMO_MODE: "true"
@@ -44,9 +43,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: API migrations and tests (80% coverage gate)
-        run: apps/api/.venv/bin/alembic upgrade head && npm run test:api
+        run: DATABASE_URL=postgresql+asyncpg://awakening:awakening-ci@127.0.0.1:5432/awakening apps/api/.venv/bin/alembic upgrade head && npm run test:api
       - name: PostgreSQL concurrency
-        run: bash scripts/run-postgres-concurrency.sh
+        run: TEST_POSTGRES_URL=postgresql+asyncpg://awakening:awakening-ci@127.0.0.1:5432/awakening bash scripts/run-postgres-concurrency.sh
       - name: Build
         run: npm run build
       - name: Start API and web for E2E
