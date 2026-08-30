@@ -33,7 +33,10 @@ export function AwakeningApp() {
   const [handle, setHandle] = useState("hunter");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"demo" | "account">("demo");
+  // Production disables the demo endpoint (DEMO_MODE=false), so real account
+  // authentication must be the safe default. Demo remains available when
+  // explicitly selected in local/demo environments.
+  const [authMode, setAuthMode] = useState<"demo" | "account">("account");
   const [player, setPlayer] = useState<Player | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [selected, setSelected] = useState<Quest | null>(null);
