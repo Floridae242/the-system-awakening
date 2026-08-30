@@ -44,14 +44,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: API migrations and tests (80% coverage gate)
-        run: alembic upgrade head && npm run test:api
+        run: apps/api/.venv/bin/alembic upgrade head && npm run test:api
       - name: PostgreSQL concurrency
         run: bash scripts/run-postgres-concurrency.sh
       - name: Build
         run: npm run build
       - name: Start API and web for E2E
         run: |
-          (uvicorn main:app --app-dir apps/api --host 127.0.0.1 --port 8000 > /tmp/awakening-api.log 2>&1 &)
+          (apps/api/.venv/bin/uvicorn main:app --app-dir apps/api --host 127.0.0.1 --port 8000 > /tmp/awakening-api.log 2>&1 &)
           (npm run start --workspace @tsa/web -- --hostname 127.0.0.1 --port 3000 > /tmp/awakening-web.log 2>&1 &)
           for i in {1..60}; do curl -fsS http://127.0.0.1:8000/api/v1/health && curl -fsS http://127.0.0.1:3000 && break || sleep 2; done
       - name: E2E
