@@ -25,16 +25,10 @@ export async function api<T>(
     const csrf = document.cookie.match(/(?:^|; )awakening_csrf=([^;]+)/)?.[1];
     if (csrf) headers.set("X-CSRF-Token", decodeURIComponent(csrf));
   }
-  // Render's free instances can briefly return a gateway error while the API
-  // wakes up. Retry only transient gateway failures; never replay arbitrary
-  // 4xx/5xx requests (especially state-changing mutations).
-  const request = () => fetch(`${API_ROOT}${path}`, { ...options, headers, credentials: "include" });
-  let response = await request();
-  const retryable = options.method === undefined || options.method === "GET" || options.method === "HEAD" || path === "/auth/login";
-  if (retryable && (response.status === 502 || response.status === 503 || response.status === 504)) {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    response = await request();
-  }
+  // The server-side BFF owns bounded retries for safe upstream requests.
+  // Keeping the browser single-shot avoids retry amplification and duplicate
+  // authentication/session work.
+  const response = await fetch(`${API_ROOT}${path}`, { ...options, headers, credentials: "include" });
   const payload = (await response.json().catch(() => null)) as Envelope<T> | { detail?: string } | null;
   if (!response.ok) {
     const message = payload && typeof payload === "object" && "detail" in payload ? payload.detail : undefined;
