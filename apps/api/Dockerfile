@@ -17,4 +17,7 @@ COPY --chown=awakening:awakening apps/api ./apps/api
 
 USER 10001:10001
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "main:app", "--app-dir", "apps/api", "--host", "0.0.0.0", "--port", "8000"]
+# Apply committed schema migrations before accepting traffic. Alembic's
+# transactional migrations are safe to re-run and prevent a fresh production
+# service from serving endpoints against an incomplete database schema.
+CMD ["sh", "-c", "alembic -c alembic.ini upgrade head && exec python -m uvicorn main:app --app-dir apps/api --host 0.0.0.0 --port ${PORT:-8000}"]
