@@ -13,6 +13,11 @@ test("real action to persisted inventory Core Loop", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Trial of Focus" })).toBeVisible();
 
   await page.getByLabel("Observed value").fill("30");
+  await page.getByLabel("Image evidence (optional)").setInputFiles({
+    name: "proof.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+  });
   await page.getByRole("button", { name: "SUBMIT PROOF" }).click();
   await page.getByRole("button", { name: "VERIFY EVIDENCE" }).click();
 

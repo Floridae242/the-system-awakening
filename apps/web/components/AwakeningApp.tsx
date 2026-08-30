@@ -43,6 +43,7 @@ export function AwakeningApp() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [chest, setChest] = useState<ChestResult | null>(null);
   const [duration, setDuration] = useState(30);
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [completed, setCompleted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("Enter the System to begin.");
@@ -55,6 +56,7 @@ export function AwakeningApp() {
     setVerification(null);
     setChest(null);
     setCompleted(false);
+    setEvidenceFile(null);
   }
 
   const loadWorld = useCallback(async (accessToken: string) => {
@@ -127,8 +129,13 @@ export function AwakeningApp() {
         idempotencyKey: crypto.randomUUID(),
         body: JSON.stringify({ evidence_type: "manual", manual_evidence }),
       });
+      if (evidenceFile) {
+        const form = new FormData();
+        form.append("image", evidenceFile);
+        await api(`/submissions/${result.id}/evidence/image`, { method: "POST", body: form });
+      }
       setSubmission(result);
-      setNotice("PROOF RECEIVED — ready for deterministic demo verification.");
+      setNotice(evidenceFile ? "PROOF + IMAGE RECEIVED — ready for verification." : "PROOF RECEIVED — ready for deterministic demo verification.");
     });
   }
 
@@ -240,6 +247,8 @@ export function AwakeningApp() {
                   <input id="duration" type="number" min={0} value={duration} onChange={(event) => setDuration(Number(event.target.value))} />
                 </>
               )}
+              <label htmlFor="evidence-image">Image evidence (optional)</label>
+              <input id="evidence-image" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)} />
               <button onClick={submitProof} disabled={busy || (selected.objective.type === "completion" && !completed)}>SUBMIT PROOF</button>
             </div>}
             {submission && !verification && <button onClick={verify} disabled={busy}>VERIFY EVIDENCE</button>}
