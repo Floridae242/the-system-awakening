@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # The System — Awakening
 
 Real-life RPG platform: real actions → real proof → verified results → visible character growth.
