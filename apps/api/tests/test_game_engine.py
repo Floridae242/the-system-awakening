@@ -36,3 +36,8 @@ def test_engine_rejects_invalid_authoritative_inputs():
         calculate_quest_reward("UNKNOWN", "PASS", 0)
     with pytest.raises(ValueError):
         chest_rarity_from_roll(1)
+
+
+def test_engine_rejects_unknown_rules_version():
+    with pytest.raises(ValueError, match="unsupported game rules version"):
+        calculate_quest_reward("NORMAL", "PASS", 0, "9.9.9")

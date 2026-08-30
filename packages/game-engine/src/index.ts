@@ -33,6 +33,24 @@ export function levelFromExp(totalExp: number): number {
   return level;
 }
 
+export interface XpProgress {
+  level: number;
+  earned: number;
+  required: number;
+  percent: number;
+}
+
+export function xpProgress(totalExp: number): XpProgress {
+  const level = levelFromExp(totalExp);
+  let threshold = 0;
+  for (let previousLevel = 1; previousLevel < level; previousLevel++) {
+    threshold += xpRequiredForNextLevel(previousLevel);
+  }
+  const earned = totalExp - threshold;
+  const required = xpRequiredForNextLevel(level);
+  return { level, earned, required, percent: Math.round((earned / required) * 100) };
+}
+
 // ── Quest reward policy ──
 export type Difficulty = "EASY" | "NORMAL" | "HARD" | "ELITE" | "EXTREME";
 export type PerformanceBand = "PARTIAL" | "PASS" | "STRONG" | "EXCELLENT";

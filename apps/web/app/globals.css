@@ -25,6 +25,8 @@ label { color:var(--muted); font-size:.9rem; }
 h2 { margin-top:0; color:var(--cyan); font-size:1rem; letter-spacing:.12em; }
 .xp { display:flex; justify-content:space-between; align-items:end; padding:1rem; background:#0a141e; border-radius:10px; }
 .xp strong { color:var(--gold); font-size:2rem; }
+.xp-progress { display:grid; grid-template-columns:1fr auto; gap:.4rem; margin-top:.7rem; color:var(--muted); font-size:.78rem; }
+.xp-progress progress { grid-column:1/-1; width:100%; height:.7rem; accent-color:var(--gold); }
 .stats { display:grid; grid-template-columns:repeat(5,1fr); gap:.4rem; margin:1rem 0 1.5rem; }
 .stats div { padding:.65rem .25rem; text-align:center; border:1px solid #29475c; border-radius:8px; }
 .stats span,.stats strong { display:block; }

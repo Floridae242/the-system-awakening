@@ -1,6 +1,7 @@
 import math
 
 BASE_EXP = {"EASY": 80, "NORMAL": 120, "HARD": 180, "ELITE": 260, "EXTREME": 360}
+GAME_RULES_VERSION = "1.0.0"
 DIFFICULTY_MULTIPLIER = {"EASY": 1.0, "NORMAL": 1.10, "HARD": 1.25, "ELITE": 1.45, "EXTREME": 1.70}
 PERFORMANCE_MULTIPLIER = {"PARTIAL": 0.70, "PASS": 1.0, "STRONG": 1.10, "EXCELLENT": 1.20}
 
@@ -26,7 +27,11 @@ def level_from_exp(total_exp: int) -> int:
     return level
 
 
-def calculate_quest_reward(difficulty: str, performance: str, streak_days: int) -> tuple[int, int]:
+def calculate_quest_reward(
+    difficulty: str, performance: str, streak_days: int, rules_version: str = GAME_RULES_VERSION
+) -> tuple[int, int]:
+    if rules_version != GAME_RULES_VERSION:
+        raise ValueError("unsupported game rules version")
     if difficulty not in BASE_EXP or performance not in PERFORMANCE_MULTIPLIER:
         raise ValueError("invalid difficulty or performance")
     if not isinstance(streak_days, int) or isinstance(streak_days, bool) or streak_days < 0:

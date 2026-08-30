@@ -32,9 +32,11 @@ def load_settings() -> Settings:
             raise RuntimeError("Production requires PostgreSQL as authoritative storage")
         if len(verification_token) < 32:
             raise RuntimeError("Production requires a private VERIFICATION_SERVICE_TOKEN")
-    origins = tuple(
-        origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",") if origin.strip()
+    configured_origins = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
     )
+    origins = tuple(origin.strip() for origin in configured_origins.split(",") if origin.strip())
     return Settings(
         app_env=app_env,
         database_url=database_url,

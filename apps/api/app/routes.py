@@ -1,10 +1,11 @@
 import hashlib
 import json
 import secrets
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,9 +37,50 @@ class DemoLogin(BaseModel):
     handle: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
 
 
+class ManualEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    duration_minutes: float | None = Field(default=None, ge=0, le=1440)
+    distance_km: float | None = Field(default=None, ge=0, le=1000)
+    completion: bool | None = None
+
+
 class SubmissionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     evidence_type: str = Field(pattern=r"^manual$")
-    manual_evidence: dict = Field(default_factory=dict)
+    manual_evidence: ManualEvidence = Field(default_factory=ManualEvidence)
+
+
+@dataclass(frozen=True)
+class QuestRules:
+    difficulty: str
+    primary_stat: str
+    objective: dict
+    rules_version: str
+
+
+def quest_snapshot(quest: QuestDefinition) -> dict:
+    return {
+        "definition_id": quest.id,
+        "version": quest.version,
+        "difficulty": quest.difficulty,
+        "primary_stat": quest.primary_stat,
+        "objective": quest.objective,
+        "verification_policy": quest.verification_policy,
+        "reward_profile": quest.reward_profile,
+        "rules_version": "1.0.0",
+    }
+
+
+def accepted_rules(accepted: PlayerQuest) -> QuestRules:
+    snapshot = accepted.definition_snapshot
+    return QuestRules(
+        difficulty=snapshot["difficulty"],
+        primary_stat=snapshot["primary_stat"],
+        objective=snapshot["objective"],
+        rules_version=snapshot.get("rules_version", "1.0.0"),
+    )
 
 
 def envelope(data: object) -> dict:
@@ -76,6 +118,8 @@ def quest_data(quest: QuestDefinition) -> dict:
         "primary_stat": quest.primary_stat,
         "objective": quest.objective,
         "verification_policy": quest.verification_policy,
+        "reward_profile": quest.reward_profile,
+        "active": quest.active,
     }
 
 
@@ -112,7 +156,11 @@ async def health(session: AsyncSession = Depends(get_session)) -> dict:
 
 
 @router.post("/auth/demo", status_code=201)
-async def demo_login(body: DemoLogin, session: AsyncSession = Depends(get_session)) -> dict:
+async def demo_login(
+    body: DemoLogin,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
     if not settings.demo_mode:
         raise HTTPException(status_code=404, detail="Not found")
     provider_id = f"demo:{body.handle.lower()}"
@@ -125,7 +173,13 @@ async def demo_login(body: DemoLogin, session: AsyncSession = Depends(get_sessio
         session.add(player)
     else:
         player = await session.scalar(select(PlayerProfile).where(PlayerProfile.user_id == user.id))
+    # Demo keeps the legacy bearer response for CLI compatibility, but the
+    # browser receives the same HttpOnly session boundary as real auth.
+    from .auth_routes import _create_session, _set_cookies
+
+    session_token, csrf_token = await _create_session(session, user.id)
     await session.commit()
+    _set_cookies(response, session_token, csrf_token)
     return envelope(
         {"access_token": create_access_token(user.id), "token_type": "bearer", "player": player_data(player)}
     )
@@ -158,8 +212,9 @@ async def accept_quest(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     key = require_key(idempotency_key)
+    player_id = player.id
     digest = request_hash({"quest_id": quest_id})
-    existing = await idempotency_record(session, player.id, "quest_accept", key)
+    existing = await idempotency_record(session, player_id, "quest_accept", key)
     if existing:
         if existing.request_hash != digest:
             raise HTTPException(status_code=409, detail="Idempotency key payload conflict")
@@ -169,27 +224,42 @@ async def accept_quest(
     quest = await session.get(QuestDefinition, quest_id)
     if quest is None or not quest.active:
         raise HTTPException(status_code=404, detail="Quest not found")
-    accepted = PlayerQuest(
-        player_id=player.id,
-        quest_definition_id=quest.id,
-        quest_definition_version=quest.version,
-    )
-    session.add(accepted)
-    await session.flush()
-    session.add(
-        IdempotencyRecord(
-            actor_id=player.id, scope="quest_accept", key=key, request_hash=digest, resource_id=accepted.id
+    active = await session.scalar(
+        select(PlayerQuest).where(
+            PlayerQuest.player_id == player_id,
+            PlayerQuest.quest_definition_id == quest.id,
+            PlayerQuest.status.in_(("ACCEPTED", "SUBMITTED", "NEED_MORE_EVIDENCE", "REVIEW")),
         )
     )
+    if active is not None:
+        raise HTTPException(status_code=409, detail="Quest is already active")
+    accepted = PlayerQuest(
+        player_id=player_id,
+        quest_definition_id=quest.id,
+        quest_definition_version=quest.version,
+        definition_snapshot=quest_snapshot(quest),
+    )
+    session.add(accepted)
     try:
+        await session.flush()
+        session.add(
+            IdempotencyRecord(
+                actor_id=player_id,
+                scope="quest_accept",
+                key=key,
+                request_hash=digest,
+                resource_id=accepted.id,
+            )
+        )
         await session.commit()
     except IntegrityError as error:
         await session.rollback()
-        winner = await idempotency_record(session, player.id, "quest_accept", key)
-        if winner is None or winner.request_hash != digest:
-            raise HTTPException(status_code=409, detail="Concurrent idempotency conflict") from error
-        accepted = await session.get(PlayerQuest, winner.resource_id)
-        response.status_code = 200
+        winner = await idempotency_record(session, player_id, "quest_accept", key)
+        if winner is not None and winner.request_hash == digest:
+            accepted = await session.get(PlayerQuest, winner.resource_id)
+            response.status_code = 200
+        else:
+            raise HTTPException(status_code=409, detail="Quest is already active") from error
     return envelope(player_quest_data(accepted))
 
 
@@ -202,40 +272,53 @@ async def create_submission(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     key = require_key(idempotency_key)
+    player_id = player.id
+    evidence = body.manual_evidence.model_dump(exclude_none=True)
+    digest = request_hash({"evidence_type": body.evidence_type, "manual_evidence": evidence})
+    existing = await idempotency_record(session, player_id, "submission", key)
+    if existing:
+        if existing.request_hash != digest:
+            raise HTTPException(status_code=409, detail="Idempotency key payload conflict")
+        submission = await session.get(Submission, existing.resource_id)
+        if submission is None or submission.player_quest_id != player_quest_id:
+            raise HTTPException(status_code=409, detail="Idempotency key resource conflict")
+        return envelope(
+            {"id": submission.id, "player_quest_id": submission.player_quest_id, "status": submission.status}
+        )
     accepted = await session.scalar(
-        select(PlayerQuest).where(PlayerQuest.id == player_quest_id, PlayerQuest.player_id == player.id)
+        select(PlayerQuest)
+        .where(PlayerQuest.id == player_quest_id, PlayerQuest.player_id == player_id)
+        .with_for_update()
     )
     if accepted is None:
         raise HTTPException(status_code=404, detail="Accepted quest not found")
     if accepted.status not in {"ACCEPTED", "NEED_MORE_EVIDENCE"}:
         raise HTTPException(status_code=409, detail="Quest cannot accept evidence in its current state")
-    digest = request_hash(body.model_dump())
-    existing = await idempotency_record(session, player.id, "submission", key)
-    if existing:
-        if existing.request_hash != digest:
-            raise HTTPException(status_code=409, detail="Idempotency key payload conflict")
-        return envelope({"id": existing.resource_id, "player_quest_id": accepted.id, "status": "CREATED"})
     submission = Submission(
         player_quest_id=accepted.id,
-        player_id=player.id,
+        player_id=player_id,
         idempotency_key=key,
         request_hash=digest,
         evidence_type=body.evidence_type,
-        manual_evidence=body.manual_evidence,
+        manual_evidence=evidence,
     )
     accepted.status = "SUBMITTED"
     session.add(submission)
-    await session.flush()
-    session.add(
-        IdempotencyRecord(
-            actor_id=player.id, scope="submission", key=key, request_hash=digest, resource_id=submission.id
-        )
-    )
     try:
+        await session.flush()
+        session.add(
+            IdempotencyRecord(
+                actor_id=player_id,
+                scope="submission",
+                key=key,
+                request_hash=digest,
+                resource_id=submission.id,
+            )
+        )
         await session.commit()
     except IntegrityError as error:
         await session.rollback()
-        winner = await idempotency_record(session, player.id, "submission", key)
+        winner = await idempotency_record(session, player_id, "submission", key)
         if winner is None or winner.request_hash != digest:
             raise HTTPException(status_code=409, detail="Concurrent idempotency conflict") from error
         submission = await session.get(Submission, winner.resource_id)
@@ -289,7 +372,7 @@ async def get_submission(
     return envelope(await submission_detail(session, submission))
 
 
-def observation_for(quest: QuestDefinition, evidence: dict) -> tuple[str, dict, str]:
+def observation_for(quest: QuestRules, evidence: dict) -> tuple[str, dict, str]:
     objective_type = quest.objective.get("type")
     target = quest.objective.get("target")
     observed = evidence.get(objective_type)
@@ -298,6 +381,8 @@ def observation_for(quest: QuestDefinition, evidence: dict) -> tuple[str, dict, 
         return "NEED_MORE_EVIDENCE", facts, "required_observation_missing"
     if not settings.demo_mode:
         return "REVIEW", facts, "manual_evidence_requires_review"
+    if objective_type == "completion" and isinstance(observed, bool):
+        return ("PASS", facts, "criteria_met") if observed else ("FAIL", facts, "criteria_not_met")
     if isinstance(target, (int, float)) and isinstance(observed, (int, float)) and not isinstance(observed, bool):
         return ("PASS", facts, "criteria_met") if observed >= target else ("FAIL", facts, "criteria_not_met")
     return "REVIEW", facts, "observation_type_mismatch"
@@ -308,12 +393,16 @@ async def settle_verified_submission(
     player: PlayerProfile,
     submission: Submission,
     accepted: PlayerQuest,
-    quest: QuestDefinition,
+    quest: QuestRules,
 ) -> None:
-    existing = await session.scalar(select(RewardGrant).where(RewardGrant.submission_id == submission.id))
+    existing = await session.scalar(
+        select(RewardGrant).where(RewardGrant.player_quest_id == accepted.id)
+    )
     if existing:
         return
-    exp, stat_gain = calculate_quest_reward(quest.difficulty, "PASS", player.streak_days)
+    exp, stat_gain = calculate_quest_reward(
+        quest.difficulty, "PASS", player.streak_days, quest.rules_version
+    )
     stat_attribute = {"STR": "str_stat", "AGI": "agi", "VIT": "vit", "INT": "int_stat", "WIL": "wil"}[
         quest.primary_stat
     ]
@@ -324,6 +413,7 @@ async def settle_verified_submission(
         setattr(player, stat_attribute, getattr(player, stat_attribute) + stat_gain)
     reward = RewardGrant(
         player_id=player.id,
+        player_quest_id=accepted.id,
         submission_id=submission.id,
         exp_granted=exp,
         stat_changes=stat_changes,
@@ -360,20 +450,33 @@ async def verify_submission(
         or not secrets.compare_digest(verification_token, settings.verification_token)
     ):
         raise HTTPException(status_code=404, detail="Submission not found")
+    candidate = await session.scalar(
+        select(Submission).where(Submission.id == submission_id, Submission.player_id == player.id)
+    )
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    locked_player = await session.scalar(
+        select(PlayerProfile)
+        .where(PlayerProfile.id == player.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    accepted = await session.scalar(
+        select(PlayerQuest)
+        .where(PlayerQuest.id == candidate.player_quest_id, PlayerQuest.player_id == player.id)
+        .with_for_update()
+    )
     submission = await session.scalar(
         select(Submission)
         .where(Submission.id == submission_id, Submission.player_id == player.id)
         .with_for_update()
     )
-    if submission is None:
+    if locked_player is None or accepted is None or submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
     existing = await session.scalar(select(VerificationResult).where(VerificationResult.submission_id == submission.id))
     if existing:
         return envelope(await submission_detail(session, submission))
-    accepted = await session.scalar(
-        select(PlayerQuest).where(PlayerQuest.id == submission.player_quest_id, PlayerQuest.player_id == player.id)
-    )
-    quest = await session.get(QuestDefinition, accepted.quest_definition_id)
+    quest = accepted_rules(accepted)
     decision, facts, reason = observation_for(quest, submission.manual_evidence or {})
     session.add(
         VerificationResult(
@@ -386,7 +489,7 @@ async def verify_submission(
     )
     submission.status = "DECIDED"
     if decision == "PASS":
-        await settle_verified_submission(session, player, submission, accepted, quest)
+        await settle_verified_submission(session, locked_player, submission, accepted, quest)
     elif decision == "NEED_MORE_EVIDENCE":
         accepted.status = "NEED_MORE_EVIDENCE"
     else:
@@ -420,17 +523,31 @@ async def open_chest(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     key = require_key(idempotency_key)
+    player_id = player.id
     chest = await session.scalar(
-        select(Chest).where(Chest.id == chest_id, Chest.player_id == player.id).with_for_update()
+        select(Chest).where(Chest.id == chest_id, Chest.player_id == player_id).with_for_update()
     )
     if chest is None:
         raise HTTPException(status_code=404, detail="Chest not found")
     digest = request_hash({"chest_id": chest_id})
-    key_record = await idempotency_record(session, player.id, "chest_open", key)
+    key_record = await idempotency_record(session, player_id, "chest_open", key)
     if key_record and key_record.request_hash != digest:
         raise HTTPException(status_code=409, detail="Idempotency key payload conflict")
     opened = await session.scalar(select(ChestOpenResult).where(ChestOpenResult.chest_id == chest.id))
     if opened:
+        if key_record is not None and key_record.resource_id != opened.id:
+            raise HTTPException(status_code=409, detail="Idempotency key resource conflict")
+        if key_record is None:
+            session.add(
+                IdempotencyRecord(
+                    actor_id=player_id,
+                    scope="chest_open",
+                    key=key,
+                    request_hash=digest,
+                    resource_id=opened.id,
+                )
+            )
+            await session.commit()
         response.status_code = 200
         return envelope(await opened_data(session, chest, opened))
     roll = 0.0 if settings.demo_mode else secrets.randbelow(1_000_000) / 1_000_000
@@ -441,7 +558,7 @@ async def open_chest(
     if definition is None:
         raise HTTPException(status_code=409, detail="Loot table has no item for persisted rarity")
     item = InventoryItem(
-        player_id=player.id,
+        player_id=player_id,
         item_definition_id=definition.id,
         item_definition_version=definition.version,
         source_chest_id=chest.id,
@@ -461,7 +578,7 @@ async def open_chest(
     if key_record is None:
         session.add(
             IdempotencyRecord(
-                actor_id=player.id, scope="chest_open", key=key, request_hash=digest, resource_id=opened.id
+                actor_id=player_id, scope="chest_open", key=key, request_hash=digest, resource_id=opened.id
             )
         )
     await session.commit()

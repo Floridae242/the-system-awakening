@@ -1,7 +1,18 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -53,15 +64,27 @@ class QuestDefinition(Base):
     primary_stat: Mapped[str] = mapped_column(String(3))
     objective: Mapped[dict] = mapped_column(JSON)
     verification_policy: Mapped[dict] = mapped_column(JSON)
+    reward_profile: Mapped[str] = mapped_column(String(40))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class PlayerQuest(Base):
     __tablename__ = "player_quests"
+    __table_args__ = (
+        Index(
+            "uq_player_quest_active_definition",
+            "player_id",
+            "quest_definition_id",
+            unique=True,
+            postgresql_where=text("status IN ('ACCEPTED', 'SUBMITTED', 'NEED_MORE_EVIDENCE', 'REVIEW')"),
+            sqlite_where=text("status IN ('ACCEPTED', 'SUBMITTED', 'NEED_MORE_EVIDENCE', 'REVIEW')"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     player_id: Mapped[str] = mapped_column(ForeignKey("player_profiles.id"), index=True)
     quest_definition_id: Mapped[str] = mapped_column(ForeignKey("quest_definitions.id"))
     quest_definition_version: Mapped[int] = mapped_column(Integer)
+    definition_snapshot: Mapped[dict] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(30), default="ACCEPTED")
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -69,7 +92,16 @@ class PlayerQuest(Base):
 
 class Submission(Base):
     __tablename__ = "quest_submissions"
-    __table_args__ = (UniqueConstraint("player_id", "idempotency_key"),)
+    __table_args__ = (
+        UniqueConstraint("player_id", "idempotency_key"),
+        Index(
+            "uq_submission_active_player_quest",
+            "player_quest_id",
+            unique=True,
+            postgresql_where=text("status = 'CREATED'"),
+            sqlite_where=text("status = 'CREATED'"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     player_quest_id: Mapped[str] = mapped_column(ForeignKey("player_quests.id"), index=True)
     player_id: Mapped[str] = mapped_column(ForeignKey("player_profiles.id"), index=True)
@@ -97,6 +129,7 @@ class RewardGrant(Base):
     __tablename__ = "reward_grants"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     player_id: Mapped[str] = mapped_column(ForeignKey("player_profiles.id"), index=True)
+    player_quest_id: Mapped[str] = mapped_column(ForeignKey("player_quests.id"), unique=True)
     submission_id: Mapped[str] = mapped_column(ForeignKey("quest_submissions.id"), unique=True)
     rules_version: Mapped[str] = mapped_column(String(30), default="1.0.0")
     exp_granted: Mapped[int] = mapped_column(Integer)
@@ -106,7 +139,21 @@ class RewardGrant(Base):
 
 class ProgressionLedger(Base):
     __tablename__ = "progression_ledger"
-    __table_args__ = (UniqueConstraint("reward_grant_id", "entry_type", "stat_name"),)
+    __table_args__ = (
+        CheckConstraint(
+            "(entry_type = 'EXP' AND stat_name IS NULL) OR "
+            "(entry_type = 'STAT' AND stat_name IS NOT NULL)",
+            name="ck_progression_entry_shape",
+        ),
+        UniqueConstraint("reward_grant_id", "entry_type", "stat_name"),
+        Index(
+            "uq_progression_exp_per_grant",
+            "reward_grant_id",
+            unique=True,
+            postgresql_where=text("entry_type = 'EXP'"),
+            sqlite_where=text("entry_type = 'EXP'"),
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     player_id: Mapped[str] = mapped_column(ForeignKey("player_profiles.id"), index=True)
     reward_grant_id: Mapped[str] = mapped_column(ForeignKey("reward_grants.id"))

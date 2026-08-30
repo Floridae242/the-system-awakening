@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { xpProgress } from "@tsa/game-engine";
 import { api } from "../lib/api";
 
 type Stats = { str: number; agi: number; vit: number; int: number; wil: number };
@@ -11,7 +12,7 @@ type Quest = {
   category: string;
   difficulty: string;
   primary_stat: string;
-  objective: { type: string; target: number };
+  objective: { type: string; target: number | string };
 };
 type Accepted = { id: string; definition_id: string; status: string };
 type Submission = { id: string; status: string };
@@ -30,6 +31,9 @@ const stats: Array<[keyof Stats, string]> = [
 export function AwakeningApp() {
   const [token, setToken] = useState("");
   const [handle, setHandle] = useState("hunter");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"demo" | "account">("demo");
   const [player, setPlayer] = useState<Player | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [selected, setSelected] = useState<Quest | null>(null);
@@ -39,8 +43,19 @@ export function AwakeningApp() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [chest, setChest] = useState<ChestResult | null>(null);
   const [duration, setDuration] = useState(30);
+  const [completed, setCompleted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("Enter the System to begin.");
+
+  function chooseQuest(quest: Quest) {
+    if (accepted && !verification) return;
+    setSelected(quest);
+    setAccepted(null);
+    setSubmission(null);
+    setVerification(null);
+    setChest(null);
+    setCompleted(false);
+  }
 
   const loadWorld = useCallback(async (accessToken: string) => {
     const [nextPlayer, nextQuests, nextInventory] = await Promise.all([
@@ -55,10 +70,9 @@ export function AwakeningApp() {
   }, []);
 
   useEffect(() => {
-    const saved = window.sessionStorage.getItem("awakening-token");
-    if (!saved) return;
-    setToken(saved);
-    loadWorld(saved).catch(() => window.sessionStorage.removeItem("awakening-token"));
+    // Authentication is maintained by the HttpOnly BFF cookie. JavaScript
+    // deliberately never persists or reads an access token.
+    loadWorld("").catch(() => undefined);
   }, [loadWorld]);
 
   async function act(action: () => Promise<void>) {
@@ -75,13 +89,13 @@ export function AwakeningApp() {
   function login(event: FormEvent) {
     event.preventDefault();
     void act(async () => {
-      const result = await api<{ access_token: string }>("/auth/demo", {
-        method: "POST",
-        body: JSON.stringify({ handle }),
-      });
-      window.sessionStorage.setItem("awakening-token", result.access_token);
-      setToken(result.access_token);
-      await loadWorld(result.access_token);
+      if (authMode === "demo") {
+        await api<{ access_token: string }>("/auth/demo", { method: "POST", body: JSON.stringify({ handle }) });
+      } else {
+        await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      }
+      setToken("");
+      await loadWorld("");
       setNotice("SYSTEM ONLINE — choose a quest.");
     });
   }
@@ -96,6 +110,7 @@ export function AwakeningApp() {
       setSubmission(null);
       setVerification(null);
       setChest(null);
+      setCompleted(false);
       setNotice("QUEST ACCEPTED — complete the real objective, then submit proof.");
     });
   }
@@ -103,7 +118,9 @@ export function AwakeningApp() {
   function submitProof() {
     if (!accepted || !selected) return;
     void act(async () => {
-      const manual_evidence = { [selected.objective.type]: duration };
+      const manual_evidence = selected.objective.type === "completion"
+        ? { completion: completed }
+        : { [selected.objective.type]: duration };
       const result = await api<Submission>(`/quests/${accepted.id}/submissions`, {
         method: "POST",
         token,
@@ -145,16 +162,29 @@ export function AwakeningApp() {
           <p className="eyebrow">AI RPG IDENTITY PROTOCOL</p>
           <h1>THE SYSTEM <span>AWAKENING</span></h1>
           <p>Real action. Real proof. Deterministic growth.</p>
+          <div className="auth-tabs" role="tablist" aria-label="Authentication method">
+            <button type="button" role="tab" aria-selected={authMode === "demo"} onClick={() => setAuthMode("demo")}>Demo</button>
+            <button type="button" role="tab" aria-selected={authMode === "account"} onClick={() => setAuthMode("account")}>Account</button>
+          </div>
           <form onSubmit={login}>
-            <label htmlFor="handle">Demo hunter name</label>
-            <input id="handle" value={handle} minLength={3} maxLength={40} pattern="[A-Za-z0-9_\-]+" onChange={(event) => setHandle(event.target.value)} />
-            <button disabled={busy}>{busy ? "AWAKENING…" : "ENTER THE SYSTEM"}</button>
+            {authMode === "demo" ? <>
+              <label htmlFor="handle">Demo hunter name</label>
+              <input id="handle" value={handle} minLength={3} maxLength={40} pattern="[A-Za-z0-9_\-]+" onChange={(event) => setHandle(event.target.value)} />
+            </> : <>
+              <label htmlFor="email">Email</label>
+              <input id="email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+              <label htmlFor="password">Password</label>
+              <input id="password" type="password" required minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} />
+            </>}
+            <button disabled={busy}>{busy ? "AWAKENING…" : authMode === "demo" ? "ENTER THE SYSTEM" : "SIGN IN"}</button>
           </form>
           <p className="notice" aria-live="polite">{notice}</p>
         </section>
       </main>
     );
   }
+
+  const experience = xpProgress(player.current_xp);
 
   return (
     <main className="app-shell">
@@ -168,6 +198,13 @@ export function AwakeningApp() {
         <article className="system-card profile-panel">
           <h2>HUNTER STATUS</h2>
           <div className="xp"><span>EXP</span><strong>{player.current_xp}</strong></div>
+          <div className="xp-progress">
+            <label htmlFor="xp-progress">Level {experience.level} progress</label>
+            <span>{experience.earned} / {experience.required} XP</span>
+            <progress id="xp-progress" max={experience.required} value={experience.earned}>
+              {experience.percent}%
+            </progress>
+          </div>
           <div className="stats">
             {stats.map(([key, label]) => <div key={key}><span>{label}</span><strong>{player.stats[key]}</strong></div>)}
           </div>
@@ -181,7 +218,7 @@ export function AwakeningApp() {
           <h2>QUEST BOARD</h2>
           <div className="quest-list" role="list">
             {quests.map((quest) => (
-              <button className={selected?.definition_id === quest.definition_id ? "quest active" : "quest"} key={quest.definition_id} onClick={() => setSelected(quest)} disabled={busy}>
+              <button className={selected?.definition_id === quest.definition_id ? "quest active" : "quest"} key={quest.definition_id} onClick={() => chooseQuest(quest)} disabled={busy || Boolean(accepted && !verification)}>
                 <span>{quest.difficulty} · {quest.primary_stat}</span><b>{quest.title}</b>
               </button>
             ))}
@@ -192,9 +229,18 @@ export function AwakeningApp() {
             <p>Complete <strong>{selected.objective.target} {selected.objective.type.replaceAll("_", " ")}</strong>.</p>
             {!accepted && <button onClick={acceptQuest} disabled={busy}>ACCEPT QUEST</button>}
             {accepted && !submission && <div className="proof-form">
-              <label htmlFor="duration">Observed value</label>
-              <input id="duration" type="number" min={0} value={duration} onChange={(event) => setDuration(Number(event.target.value))} />
-              <button onClick={submitProof} disabled={busy}>SUBMIT PROOF</button>
+              {selected.objective.type === "completion" ? (
+                <label htmlFor="completion">
+                  <input id="completion" type="checkbox" checked={completed} onChange={(event) => setCompleted(event.target.checked)} />
+                  I completed the stated objective (demo self-report)
+                </label>
+              ) : (
+                <>
+                  <label htmlFor="duration">Observed value</label>
+                  <input id="duration" type="number" min={0} value={duration} onChange={(event) => setDuration(Number(event.target.value))} />
+                </>
+              )}
+              <button onClick={submitProof} disabled={busy || (selected.objective.type === "completion" && !completed)}>SUBMIT PROOF</button>
             </div>}
             {submission && !verification && <button onClick={verify} disabled={busy}>VERIFY EVIDENCE</button>}
             {verification && <div className={`decision ${verification.verification.decision.toLowerCase()}`}>

@@ -15,7 +15,7 @@
     "test:e2e": "playwright test",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present && apps/api/.venv/bin/ruff check apps/api",
-    "verify": "npm run typecheck && npm run test && npm run build"
+    "verify": "npm run lint && npm run typecheck && npm run test && npm run build && npm run test:e2e"
   },
   "keywords": [],
   "author": "",

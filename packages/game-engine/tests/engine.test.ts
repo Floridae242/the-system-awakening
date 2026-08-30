@@ -4,6 +4,7 @@ import {
   calculateQuestReward,
   chestRarityFromRoll,
   xpRequiredForNextLevel,
+  xpProgress,
   settleReward,
   rollLootTable,
   evaluateCriteria,
@@ -20,6 +21,13 @@ describe("game engine — deterministic rules", () => {
     expect(xpRequiredForNextLevel(1)).toBe(100);
     expect(xpRequiredForNextLevel(2)).toBe(255);
     expect(() => levelFromExp(-1)).toThrow();
+  });
+
+  it("calculates progress within the current level", () => {
+    expect(xpProgress(0)).toEqual({ level: 1, earned: 0, required: 100, percent: 0 });
+    expect(xpProgress(99)).toEqual({ level: 1, earned: 99, required: 100, percent: 99 });
+    expect(xpProgress(100)).toEqual({ level: 2, earned: 0, required: 255, percent: 0 });
+    expect(xpProgress(132)).toEqual({ level: 2, earned: 32, required: 255, percent: 13 });
   });
 
   it("matches the normative reward vectors", () => {
