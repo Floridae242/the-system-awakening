@@ -9,6 +9,10 @@ interface Envelope<T> {
   data: T;
 }
 
+function isEnvelope<T>(value: unknown): value is Envelope<T> {
+  return Boolean(value && typeof value === "object" && "data" in value);
+}
+
 export async function api<T>(
   path: string,
   options: RequestInit & { token?: string; idempotencyKey?: string } = {},
@@ -24,8 +28,11 @@ export async function api<T>(
   const response = await fetch(`${API_ROOT}${path}`, { ...options, headers, credentials: "include" });
   const payload = (await response.json().catch(() => null)) as Envelope<T> | { detail?: string } | null;
   if (!response.ok) {
-    const message = payload && "detail" in payload ? payload.detail : undefined;
+    const message = payload && typeof payload === "object" && "detail" in payload ? payload.detail : undefined;
     throw new Error(message || `Request failed (${response.status})`);
   }
-  return (payload as Envelope<T>).data;
+  if (!isEnvelope<T>(payload)) {
+    throw new Error(`Invalid API response (${response.status})`);
+  }
+  return payload.data;
 }
