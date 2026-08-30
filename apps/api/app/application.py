@@ -49,6 +49,7 @@ def create_app() -> FastAPI:
             request.method in {"POST", "PUT", "PATCH", "DELETE"}
             and request.cookies.get("awakening_session")
             and not request.headers.get("authorization")
+            and "/internal/" not in request.url.path
         ):
             if not request.url.path.endswith(("/auth/login", "/auth/register", "/auth/demo")):
                 csrf_cookie = request.cookies.get("awakening_csrf")
