@@ -26,7 +26,7 @@ type ChestResult = { chest_id: string; rarity: string; item: InventoryItem };
 
 // Next inlines this public flag at build time. CI enables the deterministic
 // demo flow for E2E; production explicitly disables it.
-const demoEnabled = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+const demoEnabled = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 const stats: Array<[keyof Stats, string]> = [
   ["str", "STR"], ["agi", "AGI"], ["vit", "VIT"], ["int", "INT"], ["wil", "WIL"],
