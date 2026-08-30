@@ -15,6 +15,7 @@ from .config import settings
 from .database import get_session
 from .game_engine import calculate_quest_reward, chest_rarity_from_roll, level_from_exp
 from .models import (
+    AuditEvent,
     Chest,
     ChestOpenResult,
     IdempotencyRecord,
@@ -149,6 +150,27 @@ def require_key(key: str | None) -> str:
     return key
 
 
+def record_audit(
+    session: AsyncSession,
+    event_type: str,
+    player_id: str | None,
+    payload: dict,
+    *,
+    causation_id: str | None = None,
+    correlation_id: str | None = None,
+) -> None:
+    """Queue an auditable domain event in the same transaction as its mutation."""
+    session.add(
+        AuditEvent(
+            event_type=event_type,
+            player_id=player_id,
+            payload=payload,
+            causation_id=causation_id,
+            correlation_id=correlation_id,
+        )
+    )
+
+
 @router.get("/health")
 async def health(session: AsyncSession = Depends(get_session)) -> dict:
     await session.execute(text("SELECT 1"))
@@ -251,6 +273,13 @@ async def accept_quest(
                 resource_id=accepted.id,
             )
         )
+        record_audit(
+            session,
+            "quest.accepted",
+            player_id,
+            {"quest_id": quest.id, "player_quest_id": accepted.id},
+            causation_id=accepted.id,
+        )
         await session.commit()
     except IntegrityError as error:
         await session.rollback()
@@ -314,6 +343,13 @@ async def create_submission(
                 request_hash=digest,
                 resource_id=submission.id,
             )
+        )
+        record_audit(
+            session,
+            "submission.created",
+            player_id,
+            {"submission_id": submission.id, "player_quest_id": accepted.id},
+            causation_id=submission.id,
         )
         await session.commit()
     except IntegrityError as error:
@@ -434,6 +470,13 @@ async def settle_verified_submission(
             )
         )
     session.add(Chest(player_id=player.id, reward_grant_id=reward.id))
+    record_audit(
+        session,
+        "reward.granted",
+        player.id,
+        {"reward_id": reward.id, "submission_id": submission.id, "exp": exp, "stat_changes": stat_changes},
+        causation_id=submission.id,
+    )
     accepted.status = "COMPLETED"
     accepted.completed_at = datetime.now(UTC)
 
@@ -490,6 +533,13 @@ async def verify_submission(
             reason_code=reason,
             fallback_used=settings.demo_mode,
         )
+    )
+    record_audit(
+        session,
+        "submission.verified",
+        locked_player.id,
+        {"submission_id": submission.id, "decision": decision, "reason_code": reason},
+        causation_id=submission.id,
     )
     submission.status = "DECIDED"
     if decision == "PASS":
@@ -585,6 +635,13 @@ async def open_chest(
                 actor_id=player_id, scope="chest_open", key=key, request_hash=digest, resource_id=opened.id
             )
         )
+    record_audit(
+        session,
+        "chest.opened",
+        player_id,
+        {"chest_id": chest.id, "item_instance_id": item.id, "rarity": rarity},
+        causation_id=chest.id,
+    )
     await session.commit()
     return envelope(await opened_data(session, chest, opened))
 

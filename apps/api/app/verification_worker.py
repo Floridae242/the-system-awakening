@@ -50,12 +50,14 @@ class VerificationWorker:
 
         # Imported lazily so the core routes may optionally delegate their
         # production path to this worker without creating an import cycle.
-        from .routes import accepted_rules, observation_for, settle_verified_submission, submission_detail
+        from .routes import accepted_rules, observation_for, record_audit, settle_verified_submission, submission_detail
 
         async with session.begin():
             candidate = await session.scalar(select(Submission).where(Submission.id == submission_id))
             if candidate is None:
                 raise HTTPException(status_code=404, detail="Submission not found")
+            # Keep the same lock order as the browser-facing path to prevent
+            # cross-worker deadlocks when both receive the same submission.
             player = await session.scalar(
                 select(PlayerProfile)
                 .where(PlayerProfile.id == candidate.player_id)
@@ -88,6 +90,13 @@ class VerificationWorker:
                     reason_code=reason,
                     fallback_used=True,
                 )
+            )
+            record_audit(
+                session,
+                "submission.verified",
+                player.id,
+                {"submission_id": submission.id, "decision": decision, "reason_code": reason},
+                causation_id=submission.id,
             )
             submission.status = "DECIDED"
             if decision == "PASS":

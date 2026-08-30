@@ -213,3 +213,16 @@ class IdempotencyRecord(Base):
     request_hash: Mapped[str] = mapped_column(String(64))
     resource_id: Mapped[str] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    __table_args__ = (Index("ix_audit_events_player_created", "player_id", "created_at"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    event_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    player_id: Mapped[str | None] = mapped_column(ForeignKey("player_profiles.id"), nullable=True, index=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    causation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

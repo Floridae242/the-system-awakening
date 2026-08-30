@@ -1,9 +1,10 @@
 import asyncio
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.database import SessionFactory
-from app.models import QuestDefinition
+from app.models import AuditEvent, QuestDefinition
 from main import app
 
 
@@ -284,3 +285,31 @@ def test_player_cannot_access_another_players_submission_or_chest():
             ).status_code
             == 404
         )
+
+
+def test_core_mutations_write_audit_events_in_transaction():
+    with TestClient(app) as client:
+        headers = auth_headers(client, "audit-trail-player")
+        accepted = client.post(
+            "/api/v1/quests/quest_focus_001/accept",
+            headers=idempotent(headers, "audit-accept-0001"),
+        ).json()["data"]
+        submission = client.post(
+            f"/api/v1/quests/{accepted['id']}/submissions",
+            headers=idempotent(headers, "audit-submit-0001"),
+            json={"evidence_type": "manual", "manual_evidence": {"duration_minutes": 30}},
+        ).json()["data"]
+        result = client.post(f"/api/v1/submissions/{submission['id']}/verify", headers=headers).json()["data"]
+        client.post(
+            f"/api/v1/chests/{result['reward']['chest_id']}/open",
+            headers=idempotent(headers, "audit-open-0001"),
+        )
+
+    async def events() -> list[str]:
+        async with SessionFactory() as session:
+            rows = await session.scalars(select(AuditEvent.event_type).where(AuditEvent.player_id.is_not(None)))
+            return list(rows)
+
+    event_types = asyncio.run(events())
+    expected = {"quest.accepted", "submission.created", "submission.verified", "reward.granted", "chest.opened"}
+    assert expected <= set(event_types)
