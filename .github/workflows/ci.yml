@@ -27,6 +27,7 @@ jobs:
       DEMO_MODE: "true"
       E2E_EXTERNAL: "1"
       BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_DEMO_MODE: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

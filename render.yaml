@@ -34,5 +34,7 @@ services:
     healthCheckPath: /
     autoDeploy: true
     envVars:
+      - key: NEXT_PUBLIC_DEMO_MODE
+        value: "false"
       - key: AWAKENING_API_INTERNAL_URL
         sync: false

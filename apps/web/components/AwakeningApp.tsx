@@ -24,7 +24,9 @@ type VerificationDetail = {
 type InventoryItem = { id: string; name: string; rarity: string; power: number };
 type ChestResult = { chest_id: string; rarity: string; item: InventoryItem };
 
-const demoEnabled = process.env.NODE_ENV !== "production";
+// Next inlines this public flag at build time. CI enables the deterministic
+// demo flow for E2E; production explicitly disables it.
+const demoEnabled = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
 
 const stats: Array<[keyof Stats, string]> = [
   ["str", "STR"], ["agi", "AGI"], ["vit", "VIT"], ["int", "INT"], ["wil", "WIL"],
