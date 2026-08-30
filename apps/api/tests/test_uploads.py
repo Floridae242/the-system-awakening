@@ -1,12 +1,21 @@
+import io
 
 import pytest
 from fastapi import HTTPException
+from PIL import Image
 
 from app.uploads import MAX_IMAGE_BYTES, store_private_image, validate_image_bytes
 
-PNG = b"\x89PNG\r\n\x1a\n" + (b"\x00" * 4) + b"IHDR" + (b"\x00" * 4) + b"IEND\xaeB`\x82"
-JPEG = b"\xff\xd8\xff" + b"payload" + b"\xff\xd9"
-WEBP = b"RIFF" + (len(b"WEBPpayload")).to_bytes(4, "little") + b"WEBPpayload"
+
+def _image(format: str) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (2, 2), "#29d9ff").save(buffer, format=format)
+    return buffer.getvalue()
+
+
+PNG = _image("PNG")
+JPEG = _image("JPEG")
+WEBP = _image("WEBP")
 
 
 @pytest.mark.parametrize(

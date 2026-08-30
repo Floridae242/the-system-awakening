@@ -7,6 +7,7 @@ metadata only; the generated object key is an internal storage reference.
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 import secrets
 from dataclasses import dataclass
@@ -14,8 +15,10 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile
+from PIL import Image, UnidentifiedImageError
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_IMAGE_PIXELS = 20_000_000
 _PNG = b"\x89PNG\r\n\x1a\n"
 _JPEG = b"\xff\xd8\xff"
 _WEBP_RIFF = b"RIFF"
@@ -59,6 +62,22 @@ def validate_image_bytes(data: bytes, declared_type: str | None = None) -> Valid
     media_type, extension = detected
     if declared_type and declared_type != media_type:
         raise HTTPException(status_code=415, detail="Image content type does not match its bytes")
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if image.format != {"image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP"}[media_type]:
+                raise HTTPException(status_code=415, detail="Image content type does not match its bytes")
+            width, height = image.size
+            if width < 1 or height < 1 or width * height > MAX_IMAGE_PIXELS:
+                raise HTTPException(status_code=413, detail="Image dimensions exceed the safety limit")
+            image.verify()
+        # verify() does not decode pixels; load a second instance to reject
+        # truncated or malformed payloads that pass container checks.
+        with Image.open(io.BytesIO(data)) as image:
+            image.load()
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        raise HTTPException(status_code=415, detail="Unsupported or invalid image format") from error
     return ValidatedImage(media_type, extension, len(data), hashlib.sha256(data).hexdigest(), data)
 
 
