@@ -17,6 +17,7 @@ class Settings:
     demo_mode: bool
     cors_origins: tuple[str, ...]
     verification_token: str
+    redis_url: str = ""
 
 
 def load_settings() -> Settings:
@@ -25,6 +26,7 @@ def load_settings() -> Settings:
     demo_mode = _bool("DEMO_MODE", app_env != "production")
     database_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./awakening-dev.db")
     verification_token = os.getenv("VERIFICATION_SERVICE_TOKEN", "")
+    redis_url = os.getenv("REDIS_URL", "")
     if app_env == "production":
         if demo_mode or jwt_secret.startswith("development-only") or len(jwt_secret) < 32:
             raise RuntimeError("Production requires DEMO_MODE=false and a private JWT_SECRET")
@@ -44,6 +46,7 @@ def load_settings() -> Settings:
         demo_mode=demo_mode,
         cors_origins=origins,
         verification_token=verification_token,
+        redis_url=redis_url,
     )
 
 

@@ -18,7 +18,7 @@ from .auth_store import auth_credentials, auth_sessions
 from .config import settings
 from .database import get_session
 from .models import PlayerProfile, User
-from .rate_limit import enforce
+from .rate_limit import enforce_shared
 
 router = APIRouter(prefix="/api/v1/auth")
 SESSION_COOKIE = "awakening_session"
@@ -111,7 +111,7 @@ def _set_cookies(response: Response, session_token: str, csrf: str) -> None:
 async def register(
     request: Request, response: Response, body: Credentials, session: AsyncSession = Depends(get_session)
 ) -> dict:
-    enforce(request, bucket="auth", limit=8)
+    await enforce_shared(request, bucket="auth", limit=8)
     email = _email(body.email)
     exists = await session.scalar(select(auth_credentials.c.user_id).where(auth_credentials.c.email == email))
     if exists:
@@ -135,7 +135,7 @@ async def register(
 async def login(
     request: Request, response: Response, body: Credentials, session: AsyncSession = Depends(get_session)
 ) -> dict:
-    enforce(request, bucket="auth", limit=8)
+    await enforce_shared(request, bucket="auth", limit=8)
     email = _email(body.email)
     credential = await session.execute(select(auth_credentials).where(auth_credentials.c.email == email))
     row = credential.mappings().first()

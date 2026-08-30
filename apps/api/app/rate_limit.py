@@ -11,6 +11,8 @@ from time import monotonic
 
 from fastapi import HTTPException, Request
 
+from .config import settings
+
 
 class RateLimiter:
     def __init__(self) -> None:
@@ -55,3 +57,37 @@ def api_rate_limit(request: Request) -> None:
     """Apply a conservative limit to state-changing API requests."""
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         enforce(request, bucket="api", limit=120)
+
+
+async def enforce_shared(request: Request, *, bucket: str, limit: int, window_seconds: int = 60) -> None:
+    """Use Redis in production; local limiter remains the dev/test fallback."""
+    if not settings.redis_url:
+        enforce(request, bucket=bucket, limit=limit, window_seconds=window_seconds)
+        return
+    try:
+        from redis.asyncio import Redis
+
+        client = Redis.from_url(settings.redis_url, decode_responses=True)
+        key = f"awakening:ratelimit:{bucket}:{client_key(request)}"
+        count = await client.incr(key)
+        if count == 1:
+            await client.expire(key, window_seconds)
+        if count > limit:
+            ttl = max(1, await client.ttl(key))
+            error = HTTPException(status_code=429, detail="Too many requests")
+            error.headers = {"Retry-After": str(ttl)}
+            raise error
+    except HTTPException:
+        raise
+    except Exception as error:
+        if settings.app_env == "production":
+            raise HTTPException(status_code=503, detail="Rate limiting unavailable") from error
+        enforce(request, bucket=bucket, limit=limit, window_seconds=window_seconds)
+    finally:
+        if "client" in locals():
+            await client.aclose()
+
+
+async def api_rate_limit_shared(request: Request) -> None:
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        await enforce_shared(request, bucket="api", limit=120)

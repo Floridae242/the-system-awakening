@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .auth_routes import router as auth_router
 from .config import settings
 from .database import Base, SessionFactory, engine
-from .rate_limit import api_rate_limit
+from .rate_limit import api_rate_limit_shared
 from .routes import router
 from .seed import seed_content
 from .upload_routes import router as upload_router
@@ -42,7 +42,7 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def enforce_http_boundaries(request: Request, call_next) -> Response:
-        api_rate_limit(request)
+        await api_rate_limit_shared(request)
         # Browser session authentication uses a double-submit CSRF token.
         # Login/register are exempt because they establish the session.
         if (
