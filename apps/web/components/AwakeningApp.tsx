@@ -24,6 +24,8 @@ type VerificationDetail = {
 type InventoryItem = { id: string; name: string; rarity: string; power: number };
 type ChestResult = { chest_id: string; rarity: string; item: InventoryItem };
 
+const demoEnabled = process.env.NODE_ENV !== "production";
+
 const stats: Array<[keyof Stats, string]> = [
   ["str", "STR"], ["agi", "AGI"], ["vit", "VIT"], ["int", "INT"], ["wil", "WIL"],
 ];
@@ -36,7 +38,7 @@ export function AwakeningApp() {
   // Production disables the demo endpoint (DEMO_MODE=false), so real account
   // authentication must be the safe default. Demo remains available when
   // explicitly selected in local/demo environments.
-  const [authMode, setAuthMode] = useState<"demo" | "account">("account");
+  const [authMode, setAuthMode] = useState<"demo" | "account" | "register">("account");
   const [player, setPlayer] = useState<Player | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [selected, setSelected] = useState<Quest | null>(null);
@@ -96,6 +98,8 @@ export function AwakeningApp() {
     void act(async () => {
       if (authMode === "demo") {
         await api<{ access_token: string }>("/auth/demo", { method: "POST", body: JSON.stringify({ handle }) });
+      } else if (authMode === "register") {
+        await api("/auth/register", { method: "POST", body: JSON.stringify({ email, password }) });
       } else {
         await api("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
       }
@@ -173,8 +177,9 @@ export function AwakeningApp() {
           <h1>THE SYSTEM <span>AWAKENING</span></h1>
           <p>Real action. Real proof. Deterministic growth.</p>
           <div className="auth-tabs" role="tablist" aria-label="Authentication method">
-            <button type="button" role="tab" aria-selected={authMode === "demo"} onClick={() => setAuthMode("demo")}>Demo</button>
+            {demoEnabled && <button type="button" role="tab" aria-selected={authMode === "demo"} onClick={() => setAuthMode("demo")}>Demo</button>}
             <button type="button" role="tab" aria-selected={authMode === "account"} onClick={() => setAuthMode("account")}>Account</button>
+            <button type="button" role="tab" aria-selected={authMode === "register"} onClick={() => setAuthMode("register")}>Register</button>
           </div>
           <form onSubmit={login}>
             {authMode === "demo" ? <>
@@ -186,7 +191,7 @@ export function AwakeningApp() {
               <label htmlFor="password">Password</label>
               <input id="password" type="password" required minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} />
             </>}
-            <button disabled={busy}>{busy ? "AWAKENING…" : authMode === "demo" ? "ENTER THE SYSTEM" : "SIGN IN"}</button>
+            <button disabled={busy}>{busy ? "AWAKENING…" : authMode === "demo" ? "ENTER THE SYSTEM" : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}</button>
           </form>
           <p className="notice" aria-live="polite">{notice}</p>
         </section>
