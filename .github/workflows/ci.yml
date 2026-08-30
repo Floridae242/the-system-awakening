@@ -36,7 +36,7 @@ jobs:
       - run: npm ci
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - run: python -m venv apps/api/.venv && apps/api/.venv/bin/pip install -r apps/api/requirements-dev.txt
       - name: Lint
         run: npm run lint
