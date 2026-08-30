@@ -53,27 +53,28 @@ class VerificationWorker:
         from .routes import accepted_rules, observation_for, settle_verified_submission, submission_detail
 
         async with session.begin():
+            candidate = await session.scalar(select(Submission).where(Submission.id == submission_id))
+            if candidate is None:
+                raise HTTPException(status_code=404, detail="Submission not found")
+            player = await session.scalar(
+                select(PlayerProfile)
+                .where(PlayerProfile.id == candidate.player_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
             submission = await session.scalar(
                 select(Submission).where(Submission.id == submission_id).with_for_update()
             )
             if submission is None:
                 raise HTTPException(status_code=404, detail="Submission not found")
-
+            accepted = await session.scalar(
+                select(PlayerQuest).where(PlayerQuest.id == submission.player_quest_id).with_for_update()
+            )
             existing = await session.scalar(
                 select(VerificationResult).where(VerificationResult.submission_id == submission.id)
             )
             if existing is not None:
                 return await submission_detail(session, submission)
-
-            accepted = await session.scalar(
-                select(PlayerQuest).where(PlayerQuest.id == submission.player_quest_id).with_for_update()
-            )
-            player = await session.scalar(
-                select(PlayerProfile)
-                .where(PlayerProfile.id == submission.player_id)
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
             if accepted is None or player is None or accepted.player_id != player.id:
                 raise HTTPException(status_code=404, detail="Submission not found")
 
