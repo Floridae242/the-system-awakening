@@ -54,6 +54,8 @@ jobs:
       - name: Start API and web for E2E
         run: |
           (apps/api/.venv/bin/uvicorn main:app --app-dir apps/api --host 127.0.0.1 --port 8000 > /tmp/awakening-api.log 2>&1 &)
+          NEXT_PUBLIC_DEMO_MODE=true npm run build --workspace @tsa/web
+          grep -R -q "Demo hunter name" apps/web/.next/server apps/web/.next/static
           (npm run start --workspace @tsa/web -- --hostname 127.0.0.1 --port 3000 > /tmp/awakening-web.log 2>&1 &)
           for i in {1..60}; do curl -fsS http://127.0.0.1:8000/api/v1/health && curl -fsS http://127.0.0.1:3000 && break || sleep 2; done
       - name: E2E
