@@ -14,7 +14,7 @@ export default defineConfig({
     video: "retain-on-failure",
     actionTimeout: 10_000,
   },
-  webServer: [
+  webServer: process.env.E2E_EXTERNAL ? undefined : [
     {
       command: "APP_ENV=test DEMO_MODE=true JWT_SECRET=e2e-only-secret-that-is-long-enough DATABASE_URL=sqlite+aiosqlite:///:memory: CORS_ORIGINS=http://127.0.0.1:3000,http://localhost:3000 apps/api/.venv/bin/python -m uvicorn main:app --app-dir apps/api --host 127.0.0.1 --port 8000",
       url: "http://127.0.0.1:8000/api/v1/health",

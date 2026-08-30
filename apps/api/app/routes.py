@@ -445,6 +445,10 @@ async def verify_submission(
     player: PlayerProfile = Depends(current_player),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
+    # Production settlement is performed only by the authenticated internal
+    # worker; the browser-facing verification endpoint is demo/staging only.
+    if settings.app_env == "production":
+        raise HTTPException(status_code=404, detail="Submission not found")
     if not settings.demo_mode and (
         verification_token is None
         or not secrets.compare_digest(verification_token, settings.verification_token)

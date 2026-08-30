@@ -62,14 +62,14 @@ class VerificationWorker:
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
+            accepted = await session.scalar(
+                select(PlayerQuest).where(PlayerQuest.id == candidate.player_quest_id).with_for_update()
+            )
             submission = await session.scalar(
                 select(Submission).where(Submission.id == submission_id).with_for_update()
             )
             if submission is None:
                 raise HTTPException(status_code=404, detail="Submission not found")
-            accepted = await session.scalar(
-                select(PlayerQuest).where(PlayerQuest.id == submission.player_quest_id).with_for_update()
-            )
             existing = await session.scalar(
                 select(VerificationResult).where(VerificationResult.submission_id == submission.id)
             )
