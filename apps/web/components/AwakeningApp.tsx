@@ -262,8 +262,11 @@ export function AwakeningApp() {
       }
       setVerification({ verification: result.verification, reward: result.reward, flashPass: result.verification.decision === "PASS" });
       const gained = result.reward?.exp_granted ?? 0;
+      const fromXp = xpRef.current;
       await loadWorld(token);
-      if (gained > 0) countUpExp(xpRef.current, xpRef.current + gained);
+      // Animate from the pre-settlement value by the server-granted delta so the
+      // final number always equals the authoritative state (§131).
+      if (gained > 0) countUpExp(fromXp, fromXp + gained);
       if (result.verification.decision === "PASS") sfx.pass(); else sfx.fail();
       revealAchievements(result.achievements_unlocked);
       setNotice(result.verification.decision === "PASS" ? "QUEST CLEAR — exactly one reward and chest granted." : result.verification.reason_code);
