@@ -121,3 +121,31 @@ h2::before { content:"▮ "; color:var(--secondary); }
 .ach-toast small { color:var(--muted); font-size:.72rem; }
 @keyframes achIn { 0% { transform:translateX(115%); opacity:0; } 100% { transform:translateX(0); opacity:1; } }
 @media (prefers-reduced-motion:reduce) { .ach-toast { animation:none; } }
+
+/* --- SYSTEM CORE (§134) + procedural rune (§35) --- */
+.system-core { filter: drop-shadow(0 0 6px #40D9FF66); }
+.system-core .core-heart { fill: var(--primary); animation: corePulse 2.6s ease-in-out infinite; }
+.system-core .core-ring { fill: none; stroke: var(--primary); stroke-linecap: round; opacity: calc(0.85 - var(--ring, 0) * 0.12); }
+.system-core .ring-1 { --ring: 0; stroke-width: 2.4; stroke-dasharray: 62 38; animation: coreSpin 9s linear infinite; }
+.system-core .ring-2 { --ring: 1; stroke-width: 1.6; stroke-dasharray: 40 60; animation: coreSpin 14s linear infinite reverse; }
+.system-core .ring-3 { --ring: 2; stroke-width: 1.2; stroke-dasharray: 24 76; animation: coreSpin 20s linear infinite; }
+.system-core .ring-4 { --ring: 3; stroke-width: 1; stroke-dasharray: 14 86; animation: coreSpin 27s linear infinite reverse; }
+.system-core .ring-5 { --ring: 4; stroke-width: 0.8; stroke-dasharray: 8 92; animation: coreSpin 35s linear infinite; }
+@keyframes coreSpin { to { transform: rotate(360deg); transform-origin: 32px 32px; } }
+@keyframes corePulse { 0%,100% { opacity: 0.85; } 50% { opacity: 1; } }
+.rune { color: var(--gold); filter: drop-shadow(0 0 4px #FFD56A55); flex: none; }
+@media (prefers-reduced-motion:reduce) { .system-core .core-ring, .system-core .core-heart { animation: none !important; } }
+
+/* --- SYSTEM CORE (§134) + procedural rune (§35) --- */
+.system-core { filter: drop-shadow(0 0 6px #40D9FF66); }
+.system-core .core-heart { fill: var(--primary); animation: corePulse 2.6s ease-in-out infinite; }
+.system-core .core-ring { fill: none; stroke: var(--primary); stroke-linecap: round; opacity: calc(0.85 - var(--ring, 0) * 0.12); }
+.system-core .ring-1 { --ring: 0; stroke-width: 2.4; stroke-dasharray: 62 38; animation: coreSpin 9s linear infinite; transform-origin: 32px 32px; }
+.system-core .ring-2 { --ring: 1; stroke-width: 1.6; stroke-dasharray: 40 60; animation: coreSpin 14s linear infinite reverse; transform-origin: 32px 32px; }
+.system-core .ring-3 { --ring: 2; stroke-width: 1.2; stroke-dasharray: 24 76; animation: coreSpin 20s linear infinite; transform-origin: 32px 32px; }
+.system-core .ring-4 { --ring: 3; stroke-width: 1; stroke-dasharray: 14 86; animation: coreSpin 27s linear infinite reverse; transform-origin: 32px 32px; }
+.system-core .ring-5 { --ring: 4; stroke-width: 0.8; stroke-dasharray: 8 92; animation: coreSpin 35s linear infinite; transform-origin: 32px 32px; }
+@keyframes coreSpin { to { transform: rotate(360deg); } }
+@keyframes corePulse { 0%,100% { opacity: 0.85; } 50% { opacity: 1; } }
+.rune { color: var(--gold); filter: drop-shadow(0 0 4px #FFD56A55); flex: none; }
+@media (prefers-reduced-motion:reduce) { .system-core .core-ring, .system-core .core-heart { animation: none !important; } }

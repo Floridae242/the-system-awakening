@@ -44,8 +44,9 @@ infra                → docker compose (PostgreSQL 17)
 
 ## Contracts (source of truth)
 
-`01_PRD.md` … `12_RISK_REGISTER.md` · `SECURITY_PRIVACY_IP.md` · `SECURITY_CHECKLIST.md`
-(audited) · `docs/adr/0001-0004` · `09_CONTENT_SEED.json` (content versioned in DB)
+`01_PRD.md` … `12_RISK_REGISTER.md` · **`13_GAME_EXPERIENCE_BIBLE.md`** (Game Experience Layer —
+art/UX/game-design north star) · `SECURITY_PRIVACY_IP.md` · `SECURITY_CHECKLIST.md` (audited) ·
+`docs/adr/0001-0004` · `09_CONTENT_SEED.json` (content versioned in DB)
 
 ## Quick start
 

@@ -41,6 +41,42 @@ const stats: Array<[keyof Stats, string]> = [
   ["str", "STR"], ["agi", "AGI"], ["vit", "VIT"], ["int", "INT"], ["wil", "WIL"],
 ];
 
+function SystemCore({ level }: { level: number }) {
+  const rings = Math.min(5, 1 + Math.floor(level / 2));
+  const radii = [11, 15, 19, 23, 27];
+  return (
+    <svg className="system-core" width="36" height="36" viewBox="0 0 64 64" aria-hidden="true" role="presentation">
+      <circle cx="32" cy="32" r="5" className="core-heart" />
+      {radii.slice(0, rings).map((r, i) => (
+        <circle key={r} cx="32" cy="32" r={r} className={`core-ring ring-${i + 1}`} pathLength={100} />
+      ))}
+    </svg>
+  );
+}
+
+function runeSeed(code: string): number {
+  let sum = 0;
+  for (let i = 0; i < code.length; i++) sum += code.charCodeAt(i) * (i + 3);
+  return sum % 360;
+}
+
+function Rune({ seed }: { seed: number }) {
+  const angle = (seed % 60) - 30;
+  return (
+    <svg className="rune" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" role="presentation">
+      <polygon points="12,2 21,7 21,17 12,22 3,17 3,7" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <polygon
+        points="12,6 18,15 6,15"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        transform={`rotate(${angle} 12 13)`}
+      />
+      <circle cx="12" cy="13" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function AwakeningApp() {
   const [token, setToken] = useState("");
   const [handle, setHandle] = useState("hunter");
@@ -264,6 +300,7 @@ export function AwakeningApp() {
       <header className="topbar">
         <div><p className="eyebrow">THE SYSTEM // ONLINE</p><h1>{player.display_name}</h1></div>
         <div className="topbar-controls">
+          <SystemCore level={player.level} />
           <button
             type="button"
             className="mute-toggle"
@@ -277,7 +314,7 @@ export function AwakeningApp() {
       <div className="ach-stack" aria-live="polite">
         {toasts.map((item) => (
           <div className="ach-toast" key={item.code}>
-            <span className="ach-glyph" aria-hidden="true">◆</span>
+            <Rune seed={runeSeed(item.code)} />
             <div><b>ACHIEVEMENT — {item.name}</b><small>{item.description}</small></div>
           </div>
         ))}
