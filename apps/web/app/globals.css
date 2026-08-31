@@ -149,3 +149,12 @@ h2::before { content:"▮ "; color:var(--secondary); }
 @keyframes corePulse { 0%,100% { opacity: 0.85; } 50% { opacity: 1; } }
 .rune { color: var(--gold); filter: drop-shadow(0 0 4px #FFD56A55); flex: none; }
 @media (prefers-reduced-motion:reduce) { .system-core .core-ring, .system-core .core-heart { animation: none !important; } }
+
+/* --- Game Feel polish (§41/§91): real scanning states + PASS impact --- */
+.scan-state { color: var(--primary); font-size:.8rem; letter-spacing:.14em; animation: scanBlink 1s steps(2,end) infinite; }
+@keyframes scanBlink { 50% { opacity: .55; } }
+.decision.flash { animation: passImpact .7s cubic-bezier(.2,1.4,.35,1) both; position:relative; overflow:hidden; }
+.decision.flash::before { content:""; position:absolute; inset:0; background:linear-gradient(105deg,transparent 30%,#67E7A426 50%,transparent 70%); transform:translateX(-120%); animation:passSweep 1s .1s ease-out both; pointer-events:none; }
+@keyframes passImpact { 0% { transform:scale(.96); opacity:.4; } 55% { transform:scale(1.03); opacity:1; } 100% { transform:scale(1); } }
+@keyframes passSweep { to { transform:translateX(120%); } }
+@media (prefers-reduced-motion:reduce) { .decision.flash, .decision.flash::before, .scan-state { animation:none !important; } }

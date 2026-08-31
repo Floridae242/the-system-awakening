@@ -23,6 +23,7 @@ type VerificationDetail = {
   verification: { decision: "PASS" | "NEED_MORE_EVIDENCE" | "REVIEW" | "FAIL"; reason_code: string };
   reward: Reward | null;
   achievements_unlocked?: Achievement[];
+  flashPass?: boolean;
 };
 type SubmissionDetail = Submission & {
   verification: VerificationDetail["verification"] | null;
@@ -101,7 +102,9 @@ export function AwakeningApp() {
   const [notice, setNotice] = useState("Enter the System to begin.");
   const [toasts, setToasts] = useState<Achievement[]>([]);
   const [muted, setMuted] = useState(false);
+  const [scanning, setScanning] = useState("");
   const levelRef = useRef(0);
+  const xpRef = useRef(0);
 
   function chooseQuest(quest: Quest) {
     if (accepted && !verification) return;
@@ -136,6 +139,7 @@ export function AwakeningApp() {
     }
     if (levelRef.current && nextPlayer.level > levelRef.current) sfx.levelup();
     levelRef.current = nextPlayer.level;
+    xpRef.current = nextPlayer.current_xp;
   }, []);
 
   useEffect(() => {
@@ -144,6 +148,19 @@ export function AwakeningApp() {
     setMuted(sfxMuted());
     loadWorld("").catch(() => undefined);
   }, [loadWorld]);
+
+  function countUpExp(from: number, to: number): void {
+    if (to <= from) { xpRef.current = to; return; }
+    const startedAt = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / 900);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setPlayer((current) => (current ? { ...current, current_xp: Math.round(from + (to - from) * eased) } : current));
+      if (progress < 1) requestAnimationFrame(tick);
+      else xpRef.current = to;
+    };
+    requestAnimationFrame(tick);
+  }
 
   function revealAchievements(items: Achievement[] | undefined): void {
     if (!items?.length) return;
@@ -232,16 +249,21 @@ export function AwakeningApp() {
       let result: VerificationDetail | SubmissionDetail = demoEnabled
         ? await api<VerificationDetail>(`/submissions/${current.id}/verify`, { method: "POST", token })
         : await api<SubmissionDetail>(`/submissions/${current.id}`, { token });
+      const scanPhases = ["SCANNING EVIDENCE…", "CHECKING QUEST CONDITIONS…", "PREPARING RESULT…"];
       for (let attempt = 0; !demoEnabled && !result.verification && attempt < 5; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        setScanning(scanPhases[Math.min(attempt, scanPhases.length - 1)]!);
+        await new Promise((resolve) => setTimeout(resolve, 700));
         result = await api<SubmissionDetail>(`/submissions/${current.id}`, { token });
       }
+      setScanning("");
       if (!result.verification) {
         setNotice("VERIFICATION IN PROGRESS — check again shortly.");
         return;
       }
-      setVerification({ verification: result.verification, reward: result.reward });
+      setVerification({ verification: result.verification, reward: result.reward, flashPass: result.verification.decision === "PASS" });
+      const gained = result.reward?.exp_granted ?? 0;
       await loadWorld(token);
+      if (gained > 0) countUpExp(xpRef.current, xpRef.current + gained);
       if (result.verification.decision === "PASS") sfx.pass(); else sfx.fail();
       revealAchievements(result.achievements_unlocked);
       setNotice(result.verification.decision === "PASS" ? "QUEST CLEAR — exactly one reward and chest granted." : result.verification.reason_code);
@@ -287,7 +309,7 @@ export function AwakeningApp() {
             </>}
             <button disabled={busy}>{busy ? "AWAKENING…" : authMode === "demo" ? "ENTER THE SYSTEM" : authMode === "register" ? "CREATE ACCOUNT" : "SIGN IN"}</button>
           </form>
-          <p className="notice" aria-live="polite">{notice}</p>
+          <p className="notice" aria-live="polite">{scanning || notice}</p>
         </section>
       </main>
     );
@@ -319,7 +341,7 @@ export function AwakeningApp() {
           </div>
         ))}
       </div>
-      <p className="notice" aria-live="polite">{notice}</p>
+      <p className="notice" aria-live="polite">{scanning || notice}</p>
 
       <section className="grid">
         <article className="system-card profile-panel">
@@ -375,7 +397,7 @@ export function AwakeningApp() {
               <button onClick={submitProof} disabled={busy || (selected.objective.type === "completion" && !completed)}>SUBMIT PROOF</button>
             </div>}
             {submission && !verification && <button onClick={verify} disabled={busy}>{demoEnabled ? "VERIFY EVIDENCE" : "CHECK VERIFICATION"}</button>}
-            {verification && <div className={`decision ${verification.verification.decision.toLowerCase()}`}>
+            {verification && <div className={`decision ${verification.verification.decision.toLowerCase()}${(verification as VerificationDetail).flashPass ? " flash" : ""}`}>
               <b>{verification.verification.decision}</b>
               {verification.reward && <p>+{verification.reward.exp_granted} EXP · {JSON.stringify(verification.reward.stat_changes)}</p>}
             </div>}
