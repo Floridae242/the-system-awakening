@@ -48,3 +48,45 @@ test("completion quest accepts an explicit demo self-report", async ({ page }) =
   await expect(page.getByText("PASS", { exact: true })).toBeVisible();
   await expect(page.getByText(/QUEST CLEAR/)).toBeVisible();
 });
+
+async function pollDecision(page: import("@playwright/test").Page, text: string): Promise<void> {
+  for (let i = 0; i < 25; i++) {
+    if (await page.getByText(text).first().isVisible().catch(() => false)) return;
+    const button = page.getByRole("button", { name: "CHECK VERIFICATION" });
+    if (await button.isEnabled().catch(() => false)) await button.click();
+    await page.waitForTimeout(2000);
+  }
+}
+
+test("imageless evidence returns to resubmit state and settles with image", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/");
+  // The NEED_MORE/resubmit cycle exists only outside DEMO_MODE (production-like).
+  test.skip((await page.getByRole("tab", { name: "Demo" }).count()) > 0, "demo mode settles inline");
+
+  await page.getByRole("tab", { name: "Register" }).click();
+  const email = `resubmit-e2e-${Date.now()}@test.local`;
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("correct-horse-battery-staple");
+  await page.getByRole("button", { name: "CREATE ACCOUNT" }).click();
+
+  await page.getByRole("button", { name: /Trial of Focus/ }).click();
+  await page.getByRole("button", { name: "ACCEPT QUEST" }).click();
+  await page.getByLabel("Observed value").fill("30");
+  await page.getByRole("button", { name: "SUBMIT PROOF" }).click();
+  await page.getByText(/RECEIVED/i).waitFor({ timeout: 20_000 });
+  await pollDecision(page, "NEED_MORE_EVIDENCE");
+  await expect(page.getByText("NEED_MORE_EVIDENCE")).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "ATTACH IMAGE & RESUBMIT" }).click();
+  await page.getByLabel("Observed value").fill("30");
+  await page.getByLabel("Image evidence (optional)").setInputFiles({
+    name: "proof.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64"),
+  });
+  await page.getByRole("button", { name: "SUBMIT PROOF" }).click();
+  await page.getByText(/RECEIVED/i).waitFor({ timeout: 20_000 });
+  await pollDecision(page, "PASS");
+  await expect(page.getByText("PASS", { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "OPEN PERSISTED CHEST" })).toBeVisible();
+});

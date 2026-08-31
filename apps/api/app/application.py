@@ -1,4 +1,5 @@
 import asyncio
+import os
 import secrets
 from contextlib import asynccontextmanager, suppress
 
@@ -26,7 +27,9 @@ async def lifespan(_: FastAPI):
             await seed_content(session)
     worker_stop = asyncio.Event()
     worker_task = None
-    if settings.app_env == "production":
+    # Production always runs the in-process scanner; other environments may
+    # opt in (production-like E2E stacks) via the autostart flag.
+    if settings.app_env == "production" or os.getenv("VERIFICATION_WORKER_AUTOSTART") == "true":
         worker_task = asyncio.create_task(run_worker_loop(worker_stop))
     try:
         yield

@@ -476,7 +476,10 @@ def observation_for(quest: QuestRules, evidence: dict) -> tuple[str, dict, str]:
     if observed is None:
         return "NEED_MORE_EVIDENCE", facts, "required_observation_missing"
     if not settings.demo_mode and not evidence.get("image_asset"):
-        return "REVIEW", facts, "manual_evidence_requires_review"
+        # Contract (06_API_SPEC + 10_TEST_PLAN "low-quality evidence → resubmit
+        # state"): manual evidence without the required artifact goes back to
+        # the player for resubmission instead of a terminal REVIEW.
+        return "NEED_MORE_EVIDENCE", facts, "manual_evidence_requires_image"
     if objective_type == "completion" and isinstance(observed, bool):
         return ("PASS", facts, "criteria_met") if observed else ("FAIL", facts, "criteria_not_met")
     if isinstance(target, (int, float)) and isinstance(observed, (int, float)) and not isinstance(observed, bool):

@@ -300,6 +300,11 @@ export function AwakeningApp() {
               <b>{verification.verification.decision}</b>
               {verification.reward && <p>+{verification.reward.exp_granted} EXP · {JSON.stringify(verification.reward.stat_changes)}</p>}
             </div>}
+            {verification?.verification.decision === "NEED_MORE_EVIDENCE" && (
+              <button onClick={() => { setSubmission(null); setVerification(null); }} disabled={busy}>
+                ATTACH IMAGE &amp; RESUBMIT
+              </button>
+            )}
             {verification?.reward && !chest && <button className="reward-button" onClick={openChest} disabled={busy}>OPEN PERSISTED CHEST</button>}
             {chest && <div className="chest-result" data-rarity={chest.rarity.toLowerCase()}><span>{chest.rarity}</span><strong>{chest.item.name}</strong><small>Saved to authoritative inventory</small></div>}
           </div>}

@@ -1,9 +1,11 @@
 import asyncio
+import io
 from dataclasses import replace
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app import routes
 from app import verification_worker as module
@@ -75,8 +77,34 @@ def test_production_submission_is_processed_by_internal_worker(monkeypatch):
         assert asyncio.run(module.process_pending_submissions()) == 1
         detail = client.get(f"/api/v1/submissions/{submitted.json()['data']['id']}", headers=headers)
         assert detail.status_code == 200
-        assert detail.json()["data"]["verification"]["decision"] == "REVIEW"
-        assert detail.json()["data"]["verification"]["reason_code"] == "manual_evidence_requires_review"
+        body = detail.json()["data"]
+        assert body["verification"]["decision"] == "NEED_MORE_EVIDENCE"
+        assert body["verification"]["reason_code"] == "manual_evidence_requires_image"
+
+        # The quest returns to a resubmittable state (06_API_SPEC / 10_TEST_PLAN
+        # "low-quality evidence → resubmit state"): attaching the image unlocks it.
+        png = io.BytesIO()
+        Image.new("RGB", (8, 8), (64, 217, 255)).save(png, format="PNG")
+        resubmitted = client.post(
+            f"/api/v1/quests/{accepted['id']}/submissions",
+            headers={**headers, "Idempotency-Key": "production-worker-resubmit"},
+            json={"evidence_type": "manual", "manual_evidence": {"duration_minutes": 30}},
+        )
+        assert resubmitted.status_code == 202
+        resubmission_id = resubmitted.json()["data"]["id"]
+        uploaded = client.post(
+            f"/api/v1/submissions/{resubmission_id}/evidence/image",
+            headers=headers,
+            files={"image": ("evidence.png", png.getvalue(), "image/png")},
+        )
+        assert uploaded.status_code == 201
+        assert client.post(
+            f"/api/v1/submissions/{resubmission_id}/finalize", headers=headers
+        ).status_code == 202
+        assert asyncio.run(module.process_pending_submissions()) >= 1
+        settled = client.get(f"/api/v1/submissions/{resubmission_id}", headers=headers).json()["data"]
+        assert settled["verification"]["decision"] == "PASS", settled["verification"]
+        assert settled["reward"] is not None
 
 
 def test_failed_pending_job_reports_no_progress(monkeypatch):
