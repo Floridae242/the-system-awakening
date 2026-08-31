@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { xpProgress } from "@tsa/game-engine";
 import { api } from "../lib/api";
+import { sfx, sfxMuted, sfxSetMuted } from "../lib/sfx";
 
 type Stats = { str: number; agi: number; vit: number; int: number; wil: number };
 type Player = { id: string; display_name: string; level: number; current_xp: number; stats: Stats };
@@ -17,17 +18,20 @@ type Quest = {
 type Accepted = { id: string; definition_id: string; status: string };
 type Submission = { id: string; status: string };
 type Reward = { id: string; exp_granted: number; stat_changes: Record<string, number>; chest_id: string };
+type Achievement = { code: string; name: string; description: string };
 type VerificationDetail = {
   verification: { decision: "PASS" | "NEED_MORE_EVIDENCE" | "REVIEW" | "FAIL"; reason_code: string };
   reward: Reward | null;
+  achievements_unlocked?: Achievement[];
 };
 type SubmissionDetail = Submission & {
   verification: VerificationDetail["verification"] | null;
   reward: Reward | null;
+  achievements_unlocked?: Achievement[];
 };
 type ActiveProgress = { accepted: Accepted; submission: SubmissionDetail | null } | null;
 type InventoryItem = { id: string; name: string; rarity: string; power: number };
-type ChestResult = { chest_id: string; rarity: string; item: InventoryItem };
+type ChestResult = { chest_id: string; rarity: string; item: InventoryItem; achievements_unlocked?: Achievement[] };
 
 // Next inlines this public flag at build time. CI enables the deterministic
 // demo flow for E2E; production explicitly disables it.
@@ -59,6 +63,9 @@ export function AwakeningApp() {
   const [completed, setCompleted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("Enter the System to begin.");
+  const [toasts, setToasts] = useState<Achievement[]>([]);
+  const [muted, setMuted] = useState(false);
+  const levelRef = useRef(0);
 
   function chooseQuest(quest: Quest) {
     if (accepted && !verification) return;
@@ -91,13 +98,23 @@ export function AwakeningApp() {
     } else {
       setSelected((current) => current ?? nextQuests[0] ?? null);
     }
+    if (levelRef.current && nextPlayer.level > levelRef.current) sfx.levelup();
+    levelRef.current = nextPlayer.level;
   }, []);
 
   useEffect(() => {
     // Authentication is maintained by the HttpOnly BFF cookie. JavaScript
     // deliberately never persists or reads an access token.
+    setMuted(sfxMuted());
     loadWorld("").catch(() => undefined);
   }, [loadWorld]);
+
+  function revealAchievements(items: Achievement[] | undefined): void {
+    if (!items?.length) return;
+    sfx.achievement();
+    setToasts((current) => [...current, ...items]);
+    window.setTimeout(() => setToasts((current) => current.slice(items.length)), 4600);
+  }
 
   async function act(action: () => Promise<void>) {
     setBusy(true);
@@ -132,6 +149,7 @@ export function AwakeningApp() {
       const result = await api<Accepted>(`/quests/${selected.definition_id}/accept`, {
         method: "POST", token, idempotencyKey: crypto.randomUUID(),
       });
+      sfx.accept();
       setAccepted(result);
       setSubmission(null);
       setVerification(null);
@@ -161,6 +179,7 @@ export function AwakeningApp() {
       const finalized = demoEnabled
         ? result
         : await api<Submission>(`/submissions/${result.id}/finalize`, { method: "POST", token });
+      sfx.submit();
       setSubmission(finalized);
       setNotice(evidenceFile ? "PROOF + IMAGE RECEIVED — verification queued." : "PROOF RECEIVED — verification queued.");
     });
@@ -187,6 +206,8 @@ export function AwakeningApp() {
       }
       setVerification({ verification: result.verification, reward: result.reward });
       await loadWorld(token);
+      if (result.verification.decision === "PASS") sfx.pass(); else sfx.fail();
+      revealAchievements(result.achievements_unlocked);
       setNotice(result.verification.decision === "PASS" ? "QUEST CLEAR — exactly one reward and chest granted." : result.verification.reason_code);
     });
   }
@@ -198,8 +219,10 @@ export function AwakeningApp() {
       const result = await api<ChestResult>(`/chests/${chestId}/open`, {
         method: "POST", token, idempotencyKey: crypto.randomUUID(),
       });
+      sfx.chest();
       setChest(result);
       await loadWorld(token);
+      revealAchievements(result.achievements_unlocked);
       setNotice(`CHEST OPENED — ${result.item.name} persisted in inventory.`);
     });
   }
@@ -240,8 +263,25 @@ export function AwakeningApp() {
     <main className="app-shell">
       <header className="topbar">
         <div><p className="eyebrow">THE SYSTEM // ONLINE</p><h1>{player.display_name}</h1></div>
-        <div className="level-orb" aria-label={`Level ${player.level}`}><small>LEVEL</small>{player.level}</div>
+        <div className="topbar-controls">
+          <button
+            type="button"
+            className="mute-toggle"
+            aria-pressed={muted}
+            aria-label={muted ? "เปิดเสียง" : "ปิดเสียง"}
+            onClick={() => { sfxSetMuted(!muted); setMuted(!muted); if (muted) sfx.tap(); }}
+          >{muted ? "🔇" : "🔊"}</button>
+          <div className="level-orb" aria-label={`Level ${player.level}`}><small>LEVEL</small>{player.level}</div>
+        </div>
       </header>
+      <div className="ach-stack" aria-live="polite">
+        {toasts.map((item) => (
+          <div className="ach-toast" key={item.code}>
+            <span className="ach-glyph" aria-hidden="true">◆</span>
+            <div><b>ACHIEVEMENT — {item.name}</b><small>{item.description}</small></div>
+          </div>
+        ))}
+      </div>
       <p className="notice" aria-live="polite">{notice}</p>
 
       <section className="grid">

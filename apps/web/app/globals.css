@@ -110,3 +110,14 @@ h2::before { content:"▮ "; color:var(--secondary); }
   *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; }
   .chest-result::after { display:none; }
 }
+
+/* --- achievements + audio controls (SHOULD tier) --- */
+.topbar-controls { display:flex; align-items:center; gap:.8rem; }
+.mute-toggle { padding:.4rem .6rem; min-height:40px; font-size:1rem; line-height:1; }
+.ach-stack { position:fixed; top:14px; right:14px; display:grid; gap:.5rem; z-index:80; width:min(320px,90vw); }
+.ach-toast { display:flex; gap:.6rem; align-items:center; padding:.7rem .8rem; border:2px solid var(--gold); background:#1C1508F2; border-radius:2px; box-shadow:0 0 22px #FFD56A3D; animation:achIn .45s cubic-bezier(.34,1.56,.64,1) both; }
+.ach-toast .ach-glyph { color:var(--gold); font-size:1.1rem; }
+.ach-toast b { display:block; color:var(--gold); font-size:.72rem; letter-spacing:.1em; }
+.ach-toast small { color:var(--muted); font-size:.72rem; }
+@keyframes achIn { 0% { transform:translateX(115%); opacity:0; } 100% { transform:translateX(0); opacity:1; } }
+@media (prefers-reduced-motion:reduce) { .ach-toast { animation:none; } }

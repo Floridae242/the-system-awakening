@@ -226,3 +226,12 @@ class AuditEvent(Base):
     causation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AchievementUnlock(Base):
+    __tablename__ = "achievement_unlocks"
+    __table_args__ = (UniqueConstraint("player_id", "code", name="uq_achievement_player_code"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    player_id: Mapped[str] = mapped_column(ForeignKey("player_profiles.id"), index=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    unlocked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

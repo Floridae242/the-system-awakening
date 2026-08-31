@@ -10,6 +10,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .achievements import evaluate_achievements
 from .auth import create_access_token, current_player
 from .config import settings
 from .database import get_session
@@ -493,12 +494,12 @@ async def settle_verified_submission(
     submission: Submission,
     accepted: PlayerQuest,
     quest: QuestRules,
-) -> None:
+) -> list[dict]:
     existing = await session.scalar(
         select(RewardGrant).where(RewardGrant.player_quest_id == accepted.id)
     )
     if existing:
-        return
+        return []
     exp, stat_gain = calculate_quest_reward(
         quest.difficulty, "PASS", player.streak_days, quest.rules_version
     )
@@ -542,6 +543,7 @@ async def settle_verified_submission(
     )
     accepted.status = "COMPLETED"
     accepted.completed_at = datetime.now(UTC)
+    return await evaluate_achievements(session, player)
 
 
 @router.post("/submissions/{submission_id}/verify")
@@ -605,14 +607,18 @@ async def verify_submission(
         causation_id=submission.id,
     )
     submission.status = "DECIDED"
+    unlocked: list[dict] = []
     if decision == "PASS":
-        await settle_verified_submission(session, locked_player, submission, accepted, quest)
+        unlocked = await settle_verified_submission(session, locked_player, submission, accepted, quest)
     elif decision == "NEED_MORE_EVIDENCE":
         accepted.status = "NEED_MORE_EVIDENCE"
     else:
         accepted.status = decision
     await session.commit()
-    return envelope(await submission_detail(session, submission))
+    detail = await submission_detail(session, submission)
+    if unlocked:
+        detail["achievements_unlocked"] = unlocked
+    return envelope(detail)
 
 
 async def opened_data(session: AsyncSession, chest: Chest, result: ChestOpenResult) -> dict:
@@ -666,7 +672,9 @@ async def open_chest(
             )
             await session.commit()
         response.status_code = 200
-        return envelope(await opened_data(session, chest, opened))
+        replayed = await opened_data(session, chest, opened)
+        replayed["achievements_unlocked"] = await evaluate_achievements(session, player, commit=True)
+        return envelope(replayed)
     roll = 0.0 if settings.demo_mode else secrets.randbelow(1_000_000) / 1_000_000
     rarity = chest_rarity_from_roll(roll)
     definition = await session.scalar(
@@ -706,7 +714,9 @@ async def open_chest(
         causation_id=chest.id,
     )
     await session.commit()
-    return envelope(await opened_data(session, chest, opened))
+    opened = await opened_data(session, chest, opened)
+    opened["achievements_unlocked"] = await evaluate_achievements(session, player, commit=True)
+    return envelope(opened)
 
 
 @router.get("/inventory")
