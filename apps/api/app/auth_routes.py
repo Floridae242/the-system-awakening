@@ -10,15 +10,29 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import current_player
 from .auth_store import auth_credentials, auth_sessions
 from .config import settings
 from .database import get_session
-from .models import PlayerProfile, User
+from .models import (
+    AuditEvent,
+    Chest,
+    ChestOpenResult,
+    IdempotencyRecord,
+    InventoryItem,
+    PlayerProfile,
+    PlayerQuest,
+    ProgressionLedger,
+    RewardGrant,
+    Submission,
+    User,
+    VerificationResult,
+)
 from .rate_limit import enforce_shared
+from .uploads import remove_private_image
 
 router = APIRouter(prefix="/api/v1/auth")
 SESSION_COOKIE = "awakening_session"
@@ -186,3 +200,50 @@ async def establish_session(session: AsyncSession, user_id: str, response: Respo
     token, csrf = await _create_session(session, user_id)
     _set_cookies(response, token, csrf)
     return csrf
+
+
+@router.delete("/account", status_code=204)
+async def delete_account(
+    request: Request,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+    player: PlayerProfile = Depends(current_player),
+) -> Response:
+    """Erase the account and every linked activity (privacy baseline)."""
+    token = request.headers.get("x-csrf-token", "")
+    cookie = request.cookies.get(CSRF_COOKIE, "")
+    if not token or not cookie or not secrets.compare_digest(token, cookie):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+    user_id = player.user_id
+    player_id = player.id
+
+    submissions = (
+        await session.scalars(select(Submission).where(Submission.player_id == player_id))
+    ).all()
+    for submission in submissions:
+        image = (submission.manual_evidence or {}).get("image_asset")
+        if isinstance(image, dict):
+            remove_private_image(image)
+
+    own_submissions = select(Submission.id).where(Submission.player_id == player_id)
+    own_chests = select(Chest.id).where(Chest.player_id == player_id)
+    await session.execute(delete(ChestOpenResult).where(ChestOpenResult.chest_id.in_(own_chests)))
+    await session.execute(delete(InventoryItem).where(InventoryItem.player_id == player_id))
+    await session.execute(delete(ProgressionLedger).where(ProgressionLedger.player_id == player_id))
+    await session.execute(delete(Chest).where(Chest.player_id == player_id))
+    await session.execute(delete(RewardGrant).where(RewardGrant.player_id == player_id))
+    await session.execute(delete(VerificationResult).where(VerificationResult.submission_id.in_(own_submissions)))
+    await session.execute(delete(Submission).where(Submission.player_id == player_id))
+    await session.execute(delete(PlayerQuest).where(PlayerQuest.player_id == player_id))
+    await session.execute(delete(IdempotencyRecord).where(IdempotencyRecord.actor_id == player_id))
+    await session.execute(delete(AuditEvent).where(AuditEvent.player_id == player_id))
+    await session.execute(auth_sessions.delete().where(auth_sessions.c.user_id == user_id))
+    await session.execute(auth_credentials.delete().where(auth_credentials.c.user_id == user_id))
+    await session.execute(delete(PlayerProfile).where(PlayerProfile.id == player_id))
+    await session.execute(delete(User).where(User.id == user_id))
+    await session.commit()
+
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(CSRF_COOKIE, path="/")
+    return Response(status_code=204)
