@@ -475,7 +475,7 @@ def observation_for(quest: QuestRules, evidence: dict) -> tuple[str, dict, str]:
     facts = {objective_type: observed}
     if observed is None:
         return "NEED_MORE_EVIDENCE", facts, "required_observation_missing"
-    if not settings.demo_mode:
+    if not settings.demo_mode and not evidence.get("image_asset"):
         return "REVIEW", facts, "manual_evidence_requires_review"
     if objective_type == "completion" and isinstance(observed, bool):
         return ("PASS", facts, "criteria_met") if observed else ("FAIL", facts, "criteria_not_met")

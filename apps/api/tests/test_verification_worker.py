@@ -100,3 +100,48 @@ def test_failed_pending_job_reports_no_progress(monkeypatch):
 
         monkeypatch.setattr(module, "process_persisted_submission", fail)
         assert asyncio.run(module.process_pending_submissions()) == 0
+
+
+def test_production_settles_image_backed_evidence(monkeypatch):
+    """Image-backed manual evidence meeting criteria settles deterministically."""
+
+    with TestClient(app) as client:
+        headers = _auth_headers(client, "production-image-pass")
+        accepted = client.post(
+            "/api/v1/quests/quest_focus_001/accept",
+            headers={**headers, "Idempotency-Key": "production-image-accept"},
+        ).json()["data"]
+        monkeypatch.setattr(routes, "settings", replace(routes.settings, app_env="production", demo_mode=False))
+
+        submitted = client.post(
+            f"/api/v1/quests/{accepted['id']}/submissions",
+            headers={**headers, "Idempotency-Key": "production-image-submit"},
+            json={"evidence_type": "manual", "manual_evidence": {"duration_minutes": 30}},
+        )
+        assert submitted.status_code == 202
+        submission_id = submitted.json()["data"]["id"]
+        import io
+
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new("RGB", (8, 8), (64, 217, 255)).save(buffer, format="PNG")
+        png = buffer.getvalue()
+        uploaded = client.post(
+            f"/api/v1/submissions/{submission_id}/evidence/image",
+            headers=headers,
+            files={"image": ("evidence.png", png, "image/png")},
+        )
+        assert uploaded.status_code == 201, uploaded.text
+        finalized = client.post(
+            f"/api/v1/submissions/{submission_id}/finalize",
+            headers=headers,
+        )
+        assert finalized.status_code == 202
+        # The scanner may also settle leftover eligible rows from earlier tests.
+        assert asyncio.run(module.process_pending_submissions()) >= 1
+        detail = client.get(f"/api/v1/submissions/{submission_id}", headers=headers)
+        body = detail.json()["data"]
+        assert body["verification"]["decision"] == "PASS", body["verification"]
+        assert body["verification"]["reason_code"] == "criteria_met"
+        assert body["reward"] is not None
