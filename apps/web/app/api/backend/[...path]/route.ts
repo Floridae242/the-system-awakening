@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { fetchUpstream, maxBodyBytes, PayloadTooLargeError, readBodyWithLimit } from "../../../../lib/upstream";
+import { copyUpstreamHeaders, fetchUpstream, maxBodyBytes, PayloadTooLargeError, readBodyWithLimit } from "../../../../lib/upstream";
 
 const API_BASE = process.env.AWAKENING_API_INTERNAL_URL ?? "http://127.0.0.1:8000/api/v1";
 const HOP_BY_HOP = new Set(["connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "host"]);
@@ -33,8 +33,7 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   } catch {
     return NextResponse.json({ detail: "Upstream service temporarily unavailable" }, { status: 502 });
   }
-  const responseHeaders = new Headers();
-  upstream.headers.forEach((value, key) => { if (!HOP_BY_HOP.has(key) && key !== "set-cookie") responseHeaders.set(key, value); });
+  const responseHeaders = copyUpstreamHeaders(upstream.headers);
   const setCookies = upstream.headers.getSetCookie?.() ?? [];
   for (const cookie of setCookies) responseHeaders.append("set-cookie", cookie);
   return new NextResponse(upstream.body, { status: upstream.status, headers: responseHeaders });

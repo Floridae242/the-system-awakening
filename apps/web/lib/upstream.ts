@@ -1,4 +1,16 @@
 const TRANSIENT_GATEWAY_STATUSES = new Set([502, 503, 504]);
+const UNSAFE_RESPONSE_HEADERS = new Set([
+  "connection",
+  "content-encoding",
+  "content-length",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -69,4 +81,12 @@ export async function readBodyWithLimit(body: ReadableStream<Uint8Array> | null,
     offset += chunk.byteLength;
   }
   return combined;
+}
+
+export function copyUpstreamHeaders(source: Headers) {
+  const headers = new Headers();
+  source.forEach((value, key) => {
+    if (!UNSAFE_RESPONSE_HEADERS.has(key) && key !== "set-cookie") headers.set(key, value);
+  });
+  return headers;
 }

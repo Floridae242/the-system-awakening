@@ -15,7 +15,6 @@ RUN npm run build --workspace @tsa/web
 FROM node:24.19.0-alpine3.23 AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
-    NODE_OPTIONS=--dns-result-order=ipv4first \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
     AWAKENING_API_INTERNAL_URL=http://api:8000/api/v1

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { fetchUpstream } from "../../apps/web/lib/upstream";
+import { copyUpstreamHeaders, fetchUpstream } from "../../apps/web/lib/upstream";
 
 describe("fetchUpstream", () => {
   it("retries a transient gateway response for a GET", async () => {
@@ -55,5 +55,19 @@ describe("fetchUpstream", () => {
     });
 
     await expect(readBodyWithLimit(body, 6)).rejects.toBeInstanceOf(PayloadTooLargeError);
+  });
+
+  it("drops stale framing headers after fetch decompression", () => {
+    const headers = copyUpstreamHeaders(new Headers({
+      "content-encoding": "gzip",
+      "content-length": "38",
+      "content-type": "application/json",
+      "x-request-id": "request-1",
+    }));
+
+    expect(headers.get("content-length")).toBeNull();
+    expect(headers.get("content-encoding")).toBeNull();
+    expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("x-request-id")).toBe("request-1");
   });
 });
