@@ -260,7 +260,7 @@ export function AwakeningApp() {
           </div>
           <h3>INVENTORY · {inventory.length}</h3>
           <ul className="inventory">
-            {inventory.length ? inventory.map((item) => <li key={item.id}><b>{item.name}</b><span>{item.rarity} · PWR {item.power}</span></li>) : <li className="empty">No awakened items yet.</li>}
+            {inventory.length ? inventory.map((item) => <li key={item.id} data-rarity={item.rarity.toLowerCase()}><b>{item.name}</b><span><small className="rarity-tag">{item.rarity}</small> · PWR {item.power}</span></li>) : <li className="empty">No awakened items yet.</li>}
           </ul>
         </article>
 
@@ -269,7 +269,8 @@ export function AwakeningApp() {
           <div className="quest-list" role="list">
             {quests.map((quest) => (
               <button className={selected?.definition_id === quest.definition_id ? "quest active" : "quest"} key={quest.definition_id} onClick={() => chooseQuest(quest)} disabled={busy || Boolean(accepted && !verification)}>
-                <span>{quest.difficulty} · {quest.primary_stat}</span><b>{quest.title}</b>
+                <span>{quest.category}</span><b>{quest.title}</b>
+                <span className="chip" data-difficulty={quest.difficulty}>{quest.difficulty} · {quest.primary_stat}</span>
               </button>
             ))}
           </div>
@@ -300,7 +301,7 @@ export function AwakeningApp() {
               {verification.reward && <p>+{verification.reward.exp_granted} EXP · {JSON.stringify(verification.reward.stat_changes)}</p>}
             </div>}
             {verification?.reward && !chest && <button className="reward-button" onClick={openChest} disabled={busy}>OPEN PERSISTED CHEST</button>}
-            {chest && <div className="chest-result"><span>{chest.rarity}</span><strong>{chest.item.name}</strong><small>Saved to authoritative inventory</small></div>}
+            {chest && <div className="chest-result" data-rarity={chest.rarity.toLowerCase()}><span>{chest.rarity}</span><strong>{chest.item.name}</strong><small>Saved to authoritative inventory</small></div>}
           </div>}
         </article>
       </section>
