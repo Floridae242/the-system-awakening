@@ -225,6 +225,36 @@ async def list_quests(
     return envelope([quest_data(quest) for quest in quests])
 
 
+@router.get("/quests/active")
+async def active_quest(
+    player: PlayerProfile = Depends(current_player),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Restore the current quest/submission after a browser reload."""
+
+    accepted = await session.scalar(
+        select(PlayerQuest)
+        .where(
+            PlayerQuest.player_id == player.id,
+            PlayerQuest.status.in_({"ACCEPTED", "SUBMITTED", "NEED_MORE_EVIDENCE", "REVIEW"}),
+        )
+        .order_by(PlayerQuest.accepted_at.desc())
+    )
+    if accepted is None:
+        return envelope(None)
+    submission = await session.scalar(
+        select(Submission)
+        .where(Submission.player_quest_id == accepted.id)
+        .order_by(Submission.created_at.desc())
+    )
+    return envelope(
+        {
+            "accepted": player_quest_data(accepted),
+            "submission": None if submission is None else await submission_detail(session, submission),
+        }
+    )
+
+
 @router.post("/quests/{quest_id}/accept", status_code=201)
 async def accept_quest(
     quest_id: str,

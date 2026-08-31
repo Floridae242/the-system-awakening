@@ -25,6 +25,7 @@ type SubmissionDetail = Submission & {
   verification: VerificationDetail["verification"] | null;
   reward: Reward | null;
 };
+type ActiveProgress = { accepted: Accepted; submission: SubmissionDetail | null } | null;
 type InventoryItem = { id: string; name: string; rarity: string; power: number };
 type ChestResult = { chest_id: string; rarity: string; item: InventoryItem };
 
@@ -71,15 +72,25 @@ export function AwakeningApp() {
   }
 
   const loadWorld = useCallback(async (accessToken: string) => {
-    const [nextPlayer, nextQuests, nextInventory] = await Promise.all([
+    const [nextPlayer, nextQuests, nextInventory, active] = await Promise.all([
       api<Player>("/player", { token: accessToken }),
       api<Quest[]>("/quests", { token: accessToken }),
       api<InventoryItem[]>("/inventory", { token: accessToken }),
+      api<ActiveProgress>("/quests/active", { token: accessToken }),
     ]);
     setPlayer(nextPlayer);
     setQuests(nextQuests);
     setInventory(nextInventory);
-    setSelected((current) => current ?? nextQuests[0] ?? null);
+    if (active) {
+      setAccepted(active.accepted);
+      setSubmission(active.submission);
+      setVerification(active.submission?.verification
+        ? { verification: active.submission.verification, reward: active.submission.reward }
+        : null);
+      setSelected(nextQuests.find((quest) => quest.definition_id === active.accepted.definition_id) ?? nextQuests[0] ?? null);
+    } else {
+      setSelected((current) => current ?? nextQuests[0] ?? null);
+    }
   }, []);
 
   useEffect(() => {
@@ -158,12 +169,17 @@ export function AwakeningApp() {
   function verify() {
     if (!submission) return;
     void act(async () => {
+      let current = submission;
+      if (!demoEnabled && current.status === "CREATED") {
+        current = await api<Submission>(`/submissions/${current.id}/finalize`, { method: "POST", token });
+        setSubmission(current);
+      }
       let result: VerificationDetail | SubmissionDetail = demoEnabled
-        ? await api<VerificationDetail>(`/submissions/${submission.id}/verify`, { method: "POST", token })
-        : await api<SubmissionDetail>(`/submissions/${submission.id}`, { token });
+        ? await api<VerificationDetail>(`/submissions/${current.id}/verify`, { method: "POST", token })
+        : await api<SubmissionDetail>(`/submissions/${current.id}`, { token });
       for (let attempt = 0; !demoEnabled && !result.verification && attempt < 5; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 500));
-        result = await api<SubmissionDetail>(`/submissions/${submission.id}`, { token });
+        result = await api<SubmissionDetail>(`/submissions/${current.id}`, { token });
       }
       if (!result.verification) {
         setNotice("VERIFICATION IN PROGRESS — check again shortly.");

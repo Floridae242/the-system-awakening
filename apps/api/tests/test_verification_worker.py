@@ -62,6 +62,8 @@ def test_production_submission_is_processed_by_internal_worker(monkeypatch):
 
         assert submitted.status_code == 202
         assert asyncio.run(module.process_pending_submissions()) == 0
+        restored = client.get("/api/v1/quests/active", headers=headers)
+        assert restored.json()["data"]["submission"]["id"] == submitted.json()["data"]["id"]
         before_finalize = client.get(f"/api/v1/submissions/{submitted.json()['data']['id']}", headers=headers)
         assert before_finalize.json()["data"]["verification"] is None
 
