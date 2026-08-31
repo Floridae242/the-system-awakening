@@ -361,6 +361,36 @@ async def create_submission(
     return envelope({"id": submission.id, "player_quest_id": player_quest_id, "status": submission.status})
 
 
+@router.post("/submissions/{submission_id}/finalize", status_code=202)
+async def finalize_submission(
+    submission_id: str,
+    player: PlayerProfile = Depends(current_player),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Close evidence collection and make the submission worker-visible."""
+
+    submission = await session.scalar(
+        select(Submission)
+        .where(Submission.id == submission_id, Submission.player_id == player.id)
+        .with_for_update()
+    )
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.status == "CREATED":
+        submission.status = "SUBMITTED"
+        record_audit(
+            session,
+            "submission.finalized",
+            player.id,
+            {"submission_id": submission.id, "player_quest_id": submission.player_quest_id},
+            causation_id=submission.id,
+        )
+        await session.commit()
+    elif submission.status not in {"SUBMITTED", "DECIDED"}:
+        raise HTTPException(status_code=409, detail="Submission cannot be finalized in its current state")
+    return envelope({"id": submission.id, "player_quest_id": submission.player_quest_id, "status": submission.status})
+
+
 async def submission_detail(session: AsyncSession, submission: Submission) -> dict:
     verification = await session.scalar(
         select(VerificationResult).where(VerificationResult.submission_id == submission.id)

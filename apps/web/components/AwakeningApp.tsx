@@ -21,6 +21,10 @@ type VerificationDetail = {
   verification: { decision: "PASS" | "NEED_MORE_EVIDENCE" | "REVIEW" | "FAIL"; reason_code: string };
   reward: Reward | null;
 };
+type SubmissionDetail = Submission & {
+  verification: VerificationDetail["verification"] | null;
+  reward: Reward | null;
+};
 type InventoryItem = { id: string; name: string; rarity: string; power: number };
 type ChestResult = { chest_id: string; rarity: string; item: InventoryItem };
 
@@ -143,16 +147,29 @@ export function AwakeningApp() {
         form.append("image", evidenceFile);
         await api(`/submissions/${result.id}/evidence/image`, { method: "POST", body: form });
       }
-      setSubmission(result);
-      setNotice(evidenceFile ? "PROOF + IMAGE RECEIVED — ready for verification." : "PROOF RECEIVED — ready for deterministic demo verification.");
+      const finalized = demoEnabled
+        ? result
+        : await api<Submission>(`/submissions/${result.id}/finalize`, { method: "POST", token });
+      setSubmission(finalized);
+      setNotice(evidenceFile ? "PROOF + IMAGE RECEIVED — verification queued." : "PROOF RECEIVED — verification queued.");
     });
   }
 
   function verify() {
     if (!submission) return;
     void act(async () => {
-      const result = await api<VerificationDetail>(`/submissions/${submission.id}/verify`, { method: "POST", token });
-      setVerification(result);
+      let result: VerificationDetail | SubmissionDetail = demoEnabled
+        ? await api<VerificationDetail>(`/submissions/${submission.id}/verify`, { method: "POST", token })
+        : await api<SubmissionDetail>(`/submissions/${submission.id}`, { token });
+      for (let attempt = 0; !demoEnabled && !result.verification && attempt < 5; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        result = await api<SubmissionDetail>(`/submissions/${submission.id}`, { token });
+      }
+      if (!result.verification) {
+        setNotice("VERIFICATION IN PROGRESS — check again shortly.");
+        return;
+      }
+      setVerification({ verification: result.verification, reward: result.reward });
       await loadWorld(token);
       setNotice(result.verification.decision === "PASS" ? "QUEST CLEAR — exactly one reward and chest granted." : result.verification.reason_code);
     });
@@ -261,7 +278,7 @@ export function AwakeningApp() {
               <input id="evidence-image" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)} />
               <button onClick={submitProof} disabled={busy || (selected.objective.type === "completion" && !completed)}>SUBMIT PROOF</button>
             </div>}
-            {submission && !verification && <button onClick={verify} disabled={busy}>VERIFY EVIDENCE</button>}
+            {submission && !verification && <button onClick={verify} disabled={busy}>{demoEnabled ? "VERIFY EVIDENCE" : "CHECK VERIFICATION"}</button>}
             {verification && <div className={`decision ${verification.verification.decision.toLowerCase()}`}>
               <b>{verification.verification.decision}</b>
               {verification.reward && <p>+{verification.reward.exp_granted} EXP · {JSON.stringify(verification.reward.stat_changes)}</p>}

@@ -1,5 +1,6 @@
+import asyncio
 import secrets
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from .routes import router
 from .seed import seed_content
 from .upload_routes import router as upload_router
 from .verification_worker import router as verification_router
+from .verification_worker import run_worker_loop
 
 
 @asynccontextmanager
@@ -22,7 +24,18 @@ async def lifespan(_: FastAPI):
     if settings.app_env != "production":
         async with SessionFactory() as session:
             await seed_content(session)
-    yield
+    worker_stop = asyncio.Event()
+    worker_task = None
+    if settings.app_env == "production":
+        worker_task = asyncio.create_task(run_worker_loop(worker_stop))
+    try:
+        yield
+    finally:
+        if worker_task is not None:
+            worker_stop.set()
+            worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await worker_task
 
 
 def create_app() -> FastAPI:

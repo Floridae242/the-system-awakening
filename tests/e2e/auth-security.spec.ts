@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("account auth uses HttpOnly session and enforces CSRF on logout", async ({ page, request }) => {
   const email = `browser-${Date.now()}@example.com`;
   const loginData = { email, password: `Awakening-${crypto.randomUUID()}!` };
-  const registration = await request.post("http://127.0.0.1:3000/api/backend/auth/register", {
+  const registration = await request.post("/api/backend/auth/register", {
     data: { ...loginData, display_name: "Browser Hunter" },
   });
   expect(registration.ok()).toBeTruthy();

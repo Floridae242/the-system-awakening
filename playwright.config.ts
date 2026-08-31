@@ -7,7 +7,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: process.env.BASE_URL ?? "http://127.0.0.1:3000",
     channel: "chrome",
     trace: "on-first-retry",
     screenshot: "only-on-failure",

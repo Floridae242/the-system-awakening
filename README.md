@@ -87,7 +87,9 @@ server-side sessions, Secure/HttpOnly cookies, double-submit CSRF protection, an
 (`AWAKENING_API_INTERNAL_URL`). The legacy `/auth/demo` endpoint remains staging-only and also issues a
 short-lived HttpOnly session for browser smoke tests. Do not expose `VERIFICATION_SERVICE_TOKEN` to the
 browser: production verification is worker-only at
-`POST /api/v1/internal/submissions/{submission_id}/verify`.
+`POST /api/v1/internal/submissions/{submission_id}/verify`. Browser clients finalize evidence collection at
+`POST /api/v1/submissions/{submission_id}/finalize`; the API's database-backed scanner then retries finalized
+submissions after process restarts while clients read owner-scoped results with `GET /api/v1/submissions/{id}`.
 
 Production startup does not auto-seed content. Promote immutable/versioned content through a reviewed
 migration or admin job; changing an existing quest version in place is rejected. State-changing requests

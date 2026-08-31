@@ -7,6 +7,7 @@ and settlement code as the demo flow.
 """
 
 import asyncio
+import logging
 import secrets
 from dataclasses import dataclass
 
@@ -15,10 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
-from .database import get_session
+from .database import SessionFactory, get_session
 from .models import PlayerProfile, PlayerQuest, Submission, VerificationResult
 
 router = APIRouter(prefix="/api/v1/internal", tags=["internal-verification"])
+logger = logging.getLogger(__name__)
 
 
 def require_worker_token(token: str | None) -> None:
@@ -53,7 +55,12 @@ class VerificationWorker:
         from .routes import accepted_rules, observation_for, record_audit, settle_verified_submission, submission_detail
 
         async with session.begin():
-            candidate = await session.scalar(select(Submission).where(Submission.id == submission_id))
+            candidate = await session.scalar(
+                select(Submission).where(
+                    Submission.id == submission_id,
+                    Submission.status.in_({"SUBMITTED", "DECIDED"}),
+                )
+            )
             if candidate is None:
                 raise HTTPException(status_code=404, detail="Submission not found")
             # Keep the same lock order as the browser-facing path to prevent
@@ -115,6 +122,54 @@ class VerificationWorker:
 
 
 worker = VerificationWorker()
+
+
+async def process_persisted_submission(submission_id: str) -> None:
+    """Run one durable database-backed job outside the request transaction."""
+
+    async with SessionFactory() as session:
+        await worker.process_with_timeout(session, submission_id)
+
+
+async def process_pending_submissions(limit: int = 20) -> int:
+    """Claim persisted finalized submissions; safe to repeat after restarts."""
+
+    async with SessionFactory() as session:
+        pending = list(
+            await session.scalars(
+                select(Submission.id)
+                .outerjoin(VerificationResult, VerificationResult.submission_id == Submission.id)
+                .where(Submission.status == "SUBMITTED", VerificationResult.id.is_(None))
+                .order_by(Submission.created_at)
+                .limit(limit)
+            )
+        )
+    processed = 0
+    for submission_id in pending:
+        try:
+            await process_persisted_submission(submission_id)
+            processed += 1
+        except Exception:
+            # A malformed/temporarily failing job must not starve later users.
+            # The persisted SUBMITTED status leaves it eligible for a retry.
+            logger.exception("Internal verification job failed", extra={"submission_id": submission_id})
+    return processed
+
+
+async def run_worker_loop(stop: asyncio.Event, interval_seconds: float = 1.0) -> None:
+    """Continuously drain the database-backed queue with bounded retries."""
+
+    while not stop.is_set():
+        try:
+            processed = await process_pending_submissions()
+        except Exception:
+            logger.exception("Internal verification scan failed")
+            processed = 0
+        delay = 0 if processed else interval_seconds
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=delay)
+        except TimeoutError:
+            pass
 
 
 @router.post("/submissions/{submission_id}/verify")
