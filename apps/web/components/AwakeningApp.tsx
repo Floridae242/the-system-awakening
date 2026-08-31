@@ -277,7 +277,9 @@ export function AwakeningApp() {
           {selected && <div className="quest-detail">
             <p className="eyebrow">REAL OBJECTIVE</p>
             <h3>{selected.title}</h3>
-            <p>Complete <strong>{selected.objective.target} {selected.objective.type.replaceAll("_", " ")}</strong>.</p>
+            {selected.objective.type === "completion"
+              ? <p>{selected.objective.target}</p>
+              : <p>Complete <strong>{selected.objective.target} {selected.objective.type.replaceAll("_", " ")}</strong>.</p>}
             {!accepted && <button onClick={acceptQuest} disabled={busy}>ACCEPT QUEST</button>}
             {accepted && !submission && <div className="proof-form">
               {selected.objective.type === "completion" ? (
