@@ -4,7 +4,8 @@
 
 ## Prep ก่อนขึ้นเวที (5 นาที)
 
-- [ ] เปิดแท็บ 1: `https://the-system-awakening-web.onrender.com/` (ล่วงหน้า ≥1 นาที กัน cold start)
+- [ ] เปิดแท็บ 1: `https://the-system-awakening-web.onrender.com/` (ล่วงหน้า ≥1 นาที กัน cold start — API หลับ = request แรกอาจ 502, คลิกซ้ำได้เลย)
+- [ ] วิดีโอสำรองซ้อมแล้ว: `~/Desktop/Awakening-Demo-Rehearsal.webm` (1.5MB, flow ครบถึงหีบ)
 - [ ] เปิดแท็บ 2: OFFICE HQ `http://localhost:4478/`
 - [ ] เตรียมบัญชีสาธิต: สมัครไว้ก่อน (email demo) + เคลียร์ quest เก่าให้จบสถานะ
 - [ ] เปิด Run Viewer filter "Commits" ให้เห็น timeline
@@ -24,6 +25,8 @@
 4. SUBMIT PROOF → CHECK VERIFICATION → worker ตัดสินใน ~2 วินาที (โชว์ PASS + EXP บวก)
 5. OPEN PERSISTED CHEST → reveal animation → ของลง inventory
 6. **Refresh หน้า** → ของยังอยู่ (server-authoritative, idempotent)
+
+> กติกาบน production: แนบรูปหลักฐาน = ผ่าน deterministic PASS / ไม่แนบ = เข้า REVIEW (กัน self-approve)
 
 > จุดพูด: "ทุก state อยู่บน PostgreSQL หนึ่งจุดจริง — AI ไม่มีสิทธิ์แก้ game state (ADR 0003), รางวัล exactly-once"
 
