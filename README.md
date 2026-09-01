@@ -15,7 +15,7 @@ accepted through deterministic test gates.
 
 | | |
 |---|---|
-| API tests | **36 passed** (+ PostgreSQL concurrency gate) · coverage **83.4%** |
+| API tests | **44 passed** (+ PostgreSQL concurrency gate) · coverage **88.03%** |
 | Web tests + E2E | 6 unit · 4 E2E scenarios incl. full production-like verification cycle |
 | Deterministic rules | shared TS/Python test vectors (`packages/contracts/game-rules-v1.vectors.json`) |
 | Audits | `npm audit` 0 vulnerabilities · assets provenance 37 tracked / 0 untracked |
