@@ -47,6 +47,12 @@ class ManualEvidence(BaseModel):
     completion: bool | None = None
 
 
+class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9_\- ]+$")
+
+
 class SubmissionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -211,6 +217,76 @@ async def demo_login(
 
 @router.get("/player")
 async def get_player(player: PlayerProfile = Depends(current_player)) -> dict:
+    return envelope(player_data(player))
+
+
+@router.get("/player/history")
+async def get_player_history(
+    player: PlayerProfile = Depends(current_player),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    rows = await session.execute(
+        select(PlayerQuest, RewardGrant, QuestDefinition)
+        .join(RewardGrant, RewardGrant.player_quest_id == PlayerQuest.id)
+        .join(QuestDefinition, QuestDefinition.id == PlayerQuest.quest_definition_id)
+        .where(PlayerQuest.player_id == player.id, PlayerQuest.status == "COMPLETED")
+        .order_by(PlayerQuest.completed_at.desc())
+        .limit(50)
+    )
+    history = []
+    for quest, reward, definition in rows:
+        snapshot = quest.definition_snapshot or {}
+        history.append(
+            {
+                "quest_id": quest.quest_definition_id,
+                "title": definition.title,
+                "difficulty": snapshot.get("difficulty", ""),
+                "primary_stat": snapshot.get("primary_stat", ""),
+                "exp_granted": reward.exp_granted,
+                "stat_changes": reward.stat_changes,
+                "completed_at": quest.completed_at.isoformat() if quest.completed_at else None,
+            }
+        )
+    return envelope({"history": history, "total": len(history)})
+
+
+@router.get("/quests/daily")
+async def get_daily_board(
+    player: PlayerProfile = Depends(current_player),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Deterministic daily rotation (§97): main/side/optional per UTC date."""
+    ids = (
+        await session.scalars(
+            select(QuestDefinition.id).where(QuestDefinition.active).order_by(QuestDefinition.id)
+        )
+    ).all()
+    if not ids:
+        return envelope({"date": date.today().isoformat(), "main": None, "side": None, "optional": []})
+    day = date.today().timetuple().tm_yday
+    rotation = [ids[(day + offset) % len(ids)] for offset in range(2)]
+    optional = [qid for qid in ids if qid not in rotation]
+    return envelope(
+        {
+            "date": date.today().isoformat(),
+            "main": rotation[0],
+            "side": rotation[1] if len(ids) > 1 else None,
+            "optional": optional,
+        }
+    )
+
+
+@router.patch("/player")
+async def update_player(
+    body: ProfileUpdate,
+    response: Response,
+    player: PlayerProfile = Depends(current_player),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    if body.display_name is not None:
+        player.display_name = body.display_name
+        await session.commit()
+        response.status_code = 200
     return envelope(player_data(player))
 
 

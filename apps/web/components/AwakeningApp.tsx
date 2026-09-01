@@ -31,6 +31,16 @@ type SubmissionDetail = Submission & {
   achievements_unlocked?: Achievement[];
 };
 type ActiveProgress = { accepted: Accepted; submission: SubmissionDetail | null } | null;
+type DailyBoard = { date: string; main: string | null; side: string | null; optional: string[] };
+type HistoryEntry = {
+  quest_id: string;
+  title: string;
+  difficulty: string;
+  primary_stat: string;
+  exp_granted: number;
+  stat_changes: Record<string, number>;
+  completed_at: string | null;
+};
 type InventoryItem = { id: string; name: string; rarity: string; power: number };
 type ChestResult = { chest_id: string; rarity: string; item: InventoryItem; achievements_unlocked?: Achievement[] };
 
@@ -103,6 +113,12 @@ export function AwakeningApp() {
   const [toasts, setToasts] = useState<Achievement[]>([]);
   const [muted, setMuted] = useState(false);
   const [scanning, setScanning] = useState("");
+  const [daily, setDaily] = useState<DailyBoard | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[] | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const levelRef = useRef(0);
   const xpRef = useRef(0);
 
@@ -118,12 +134,16 @@ export function AwakeningApp() {
   }
 
   const loadWorld = useCallback(async (accessToken: string) => {
-    const [nextPlayer, nextQuests, nextInventory, active] = await Promise.all([
+    const [nextPlayer, nextQuests, nextInventory, active, board, historyData] = await Promise.all([
       api<Player>("/player", { token: accessToken }),
       api<Quest[]>("/quests", { token: accessToken }),
       api<InventoryItem[]>("/inventory", { token: accessToken }),
       api<ActiveProgress>("/quests/active", { token: accessToken }),
+      api<DailyBoard>("/quests/daily", { token: accessToken }),
+      api<{ history: HistoryEntry[]; total: number }>("/player/history", { token: accessToken }),
     ]);
+    setDaily(board);
+    setHistory(historyData.history);
     setPlayer(nextPlayer);
     setQuests(nextQuests);
     setInventory(nextInventory);
@@ -364,10 +384,47 @@ export function AwakeningApp() {
             <div className="stats">
             {stats.map(([key, label]) => <div key={key}><span>{label}</span><strong>{player.stats[key]}</strong></div>)}
           </div>
+          <h3>QUEST LOG · {history?.length ?? 0}</h3>
+          <ul className="questlog-list">
+            {history?.length
+              ? history.slice(0, 8).map((entry) => (
+                  <li key={entry.quest_id + String(entry.completed_at)}>
+                    <b>{entry.title}</b>
+                    <span>+{entry.exp_granted} EXP · {entry.completed_at?.slice(5, 10)}</span>
+                  </li>
+                ))
+              : <li className="empty">No completed quests yet.</li>}
+          </ul>
           <h3>INVENTORY · {inventory.length}</h3>
           <ul className="inventory">
             {inventory.length ? inventory.map((item) => <li key={item.id} data-rarity={item.rarity.toLowerCase()}><b>{item.name}</b><span><small className="rarity-tag">{item.rarity}</small> · PWR {item.power}</span></li>) : <li className="empty">No awakened items yet.</li>}
           </ul>
+          <details className="settings" onToggle={(event) => { const open = (event.target as HTMLDetailsElement).open; setShowSettings(open); if (open) setRenameValue(player.display_name); }}>
+            <summary>SETTINGS</summary>
+            <div className="settings-body">
+              <label htmlFor="rename-input">Hunter name</label>
+              <div className="settings-row">
+                <input id="rename-input" value={renameValue || player.display_name} maxLength={40} onChange={(event) => setRenameValue(event.target.value)} />
+                <button type="button" disabled={busy || renameValue.length < 3} onClick={() => void act(async () => {
+                  await api("/player", { method: "PATCH", body: JSON.stringify({ display_name: renameValue || player.display_name }) });
+                  await loadWorld(token);
+                  setNotice("IDENTITY UPDATED.");
+                })}>SAVE</button>
+              </div>
+              <label htmlFor="cur-pass">Change password</label>
+              <input id="cur-pass" type="password" placeholder="current password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+              <input type="password" placeholder="new password (12+)" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+              <button type="button" disabled={busy || newPassword.length < 12 || currentPassword.length < 1} onClick={() => void act(async () => {
+                await api("/auth/change-password", { method: "POST", body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+                setCurrentPassword(""); setNewPassword("");
+                setNotice("PASSWORD CHANGED — other devices signed out.");
+              })}>UPDATE PASSWORD</button>
+              <button type="button" className="danger-button" disabled={busy} onClick={() => void act(async () => {
+                await api("/auth/logout-all", { method: "POST" });
+                setToken(""); setPlayer(null); setNotice("SIGNED OUT EVERYWHERE.");
+              })}>SIGN OUT EVERYWHERE</button>
+            </div>
+          </details>
         </article>
 
         <article className="system-card quest-panel">
@@ -375,7 +432,7 @@ export function AwakeningApp() {
           <div className="quest-list" role="list">
             {quests.map((quest) => (
               <button className={selected?.definition_id === quest.definition_id ? "quest active" : "quest"} key={quest.definition_id} onClick={() => chooseQuest(quest)} disabled={busy || Boolean(accepted && !verification)}>
-                <span>{quest.category}</span><b>{quest.title}</b>
+                <span>{quest.category}{daily?.main === quest.definition_id ? " · ★ DAILY MAIN" : daily?.side === quest.definition_id ? " · DAILY SIDE" : ""}</span><b>{quest.title}</b>
                 <span className="chip" data-difficulty={quest.difficulty}>{quest.difficulty} · {quest.primary_stat}</span>
               </button>
             ))}

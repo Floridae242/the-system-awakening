@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 TEST_POSTGRES_URL = os.getenv("TEST_POSTGRES_URL")
 if TEST_POSTGRES_URL:
     os.environ.setdefault("DATABASE_URL", TEST_POSTGRES_URL)
@@ -15,3 +17,12 @@ os.environ["DEMO_MODE"] = "true"
 os.environ["JWT_SECRET"] = "test-only-secret-that-is-long-enough-for-hs256"
 os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{TEST_DB}")
 sys.path.insert(0, str(Path(__file__).parents[1]))
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """In-process limiter buckets must not accumulate across tests."""
+    from app.rate_limit import limiter
+
+    limiter.clear()
+    yield
+    limiter.clear()

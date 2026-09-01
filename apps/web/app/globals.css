@@ -194,3 +194,19 @@ h2::before { content:"▮ "; color:var(--secondary); }
 .legal-page h2 { font-size:1rem; margin-top:1.6rem; }
 .legal-page p { color:var(--muted); line-height:1.7; font-size:.92rem; }
 .legal-page a { color:var(--primary); }
+
+/* --- completeness pass: quest log + settings --- */
+.questlog-list { list-style:none; padding:0; display:grid; gap:.4rem; margin:.5rem 0 1.2rem; }
+.questlog-list li { display:flex; justify-content:space-between; gap:.5rem; padding:.5rem .6rem; background:#0A1220; border:1px solid var(--line); border-radius:2px; font-size:.8rem; }
+.questlog-list b { font-weight:700; }
+.questlog-list span { color:var(--gold); font-variant-numeric:tabular-nums; }
+.questlog-list .empty, .questlog-list li.empty { color:var(--muted); }
+.settings { margin-top:1rem; border-top:1px solid var(--line); padding-top:.8rem; }
+.settings summary { cursor:pointer; color:var(--muted); font-size:.78rem; letter-spacing:.12em; }
+.settings summary:hover { color:var(--primary); }
+.settings-body { display:grid; gap:.5rem; margin-top:.8rem; }
+.settings-body label { font-size:.72rem; letter-spacing:.08em; }
+.settings-row { display:flex; gap:.4rem; }
+.settings-body input { min-height:38px; font-size:.85rem; }
+.settings-body button { min-height:38px; font-size:.75rem; padding:.4rem .7rem; }
+.danger-button { border-color:#7A2B3A; background:#2A0F16; color:#FF8095; }

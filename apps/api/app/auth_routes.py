@@ -34,6 +34,14 @@ from .models import (
 from .rate_limit import enforce_shared
 from .uploads import remove_private_image
 
+
+class PasswordChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
 router = APIRouter(prefix="/api/v1/auth")
 SESSION_COOKIE = "awakening_session"
 CSRF_COOKIE = "awakening_csrf"
@@ -201,6 +209,65 @@ async def establish_session(session: AsyncSession, user_id: str, response: Respo
     token, csrf = await _create_session(session, user_id)
     _set_cookies(response, token, csrf)
     return csrf
+
+
+@router.post("/change-password")
+async def change_password(
+    request: Request,
+    body: PasswordChange,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+    player: PlayerProfile = Depends(current_player),
+) -> dict:
+    token = request.headers.get("x-csrf-token", "")
+    cookie = request.cookies.get(CSRF_COOKIE, "")
+    if not token or not cookie or not secrets.compare_digest(token, cookie):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+    row = await session.execute(
+        auth_credentials.select().where(auth_credentials.c.user_id == player.user_id)
+    )
+    credential = row.first()
+    if credential is None or not _password_verify(body.current_password, credential.password_hash):
+        raise HTTPException(status_code=403, detail="Current password is incorrect")
+
+    new_hash = _password_hash(body.new_password)
+    await session.execute(
+        auth_credentials.update()
+        .where(auth_credentials.c.user_id == player.user_id)
+        .values(password_hash=new_hash)
+    )
+    # keep the current session, revoke every other device
+    current_hash = _token_hash(request.cookies.get(SESSION_COOKIE, ""))
+    await session.execute(
+        auth_sessions.delete().where(
+            auth_sessions.c.user_id == player.user_id,
+            auth_sessions.c.token_hash != current_hash,
+        )
+    )
+    await session.commit()
+    return envelope({"password_changed": True})
+
+
+@router.post("/logout-all")
+async def logout_all(
+    request: Request,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+    player: PlayerProfile = Depends(current_player),
+) -> dict:
+    token = request.headers.get("x-csrf-token", "")
+    cookie = request.cookies.get(CSRF_COOKIE, "")
+    if not token or not cookie or not secrets.compare_digest(token, cookie):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+    await session.execute(
+        auth_sessions.delete().where(auth_sessions.c.user_id == player.user_id)
+    )
+    await session.commit()
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(CSRF_COOKIE, path="/")
+    return envelope({"logged_out_everywhere": True})
 
 
 @router.delete("/account", status_code=204)
