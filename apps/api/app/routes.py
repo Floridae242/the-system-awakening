@@ -2,11 +2,11 @@ import hashlib
 import json
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -263,12 +263,12 @@ async def get_daily_board(
     ).all()
     if not ids:
         return envelope({"date": date.today().isoformat(), "main": None, "side": None, "optional": []})
-    day = date.today().timetuple().tm_yday
+    day = game_today().timetuple().tm_yday
     rotation = [ids[(day + offset) % len(ids)] for offset in range(2)]
     optional = [qid for qid in ids if qid not in rotation]
     return envelope(
         {
-            "date": date.today().isoformat(),
+            "date": game_today().isoformat(),
             "main": rotation[0],
             "side": rotation[1] if len(ids) > 1 else None,
             "optional": optional,
@@ -363,6 +363,16 @@ async def accept_quest(
     )
     if active is not None:
         raise HTTPException(status_code=409, detail="Quest is already active")
+    completed_today = await session.scalar(
+        select(PlayerQuest.id).where(
+            PlayerQuest.player_id == player_id,
+            PlayerQuest.quest_definition_id == quest.id,
+            PlayerQuest.status == "COMPLETED",
+            func.date(PlayerQuest.completed_at) == game_today().isoformat(),
+        )
+    )
+    if completed_today is not None:
+        raise HTTPException(status_code=409, detail="Quest already completed today — come back tomorrow")
     accepted = PlayerQuest(
         player_id=player_id,
         quest_definition_id=quest.id,
@@ -620,8 +630,16 @@ async def settle_verified_submission(
     )
     accepted.status = "COMPLETED"
     accepted.completed_at = datetime.now(UTC)
-    update_daily_streak(player, datetime.now(UTC).date())
+    update_daily_streak(player, game_today())
     return await evaluate_achievements(session, player)
+
+
+GAME_TZ = timezone(timedelta(hours=7))
+
+
+def game_today() -> date:
+    """The game day for the Thai audience — fixed UTC+7, no DST drift."""
+    return datetime.now(GAME_TZ).date()
 
 
 def update_daily_streak(player: PlayerProfile, today: date) -> None:
