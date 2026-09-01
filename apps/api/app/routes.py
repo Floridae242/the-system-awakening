@@ -368,7 +368,7 @@ async def accept_quest(
             PlayerQuest.player_id == player_id,
             PlayerQuest.quest_definition_id == quest.id,
             PlayerQuest.status == "COMPLETED",
-            func.date(PlayerQuest.completed_at) == game_today().isoformat(),
+            func.date(PlayerQuest.completed_at) == game_today(),
         )
     )
     if completed_today is not None:
