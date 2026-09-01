@@ -208,7 +208,7 @@ def test_same_definition_cannot_be_accepted_twice_with_different_keys():
 
         assert first.status_code == 201
         assert second.status_code == 409
-        assert second.json()["detail"] == "Quest is already active"
+        assert second.json()["detail"] == "Another quest is already active — finish it first"
 
 
 def test_accepted_quest_verifies_against_immutable_snapshot():

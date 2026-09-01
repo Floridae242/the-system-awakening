@@ -327,7 +327,7 @@ async def active_quest(
     )
     return envelope(
         {
-            "accepted": player_quest_data(accepted),
+            "accepted": {**player_quest_data(accepted), "definition_snapshot": accepted.definition_snapshot},
             "submission": None if submission is None else await submission_detail(session, submission),
         }
     )
@@ -355,14 +355,13 @@ async def accept_quest(
     if quest is None or not quest.active:
         raise HTTPException(status_code=404, detail="Quest not found")
     active = await session.scalar(
-        select(PlayerQuest).where(
+        select(PlayerQuest.id).where(
             PlayerQuest.player_id == player_id,
-            PlayerQuest.quest_definition_id == quest.id,
             PlayerQuest.status.in_(("ACCEPTED", "SUBMITTED", "NEED_MORE_EVIDENCE", "REVIEW")),
         )
     )
     if active is not None:
-        raise HTTPException(status_code=409, detail="Quest is already active")
+        raise HTTPException(status_code=409, detail="Another quest is already active — finish it first")
     completed_today = await session.scalar(
         select(PlayerQuest.id).where(
             PlayerQuest.player_id == player_id,
