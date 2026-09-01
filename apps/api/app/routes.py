@@ -354,14 +354,17 @@ async def accept_quest(
     quest = await session.get(QuestDefinition, quest_id)
     if quest is None or not quest.active:
         raise HTTPException(status_code=404, detail="Quest not found")
+    # Parallel actives of DIFFERENT definitions are allowed (daily board §97);
+    # the same definition may only be active once.
     active = await session.scalar(
         select(PlayerQuest.id).where(
             PlayerQuest.player_id == player_id,
+            PlayerQuest.quest_definition_id == quest.id,
             PlayerQuest.status.in_(("ACCEPTED", "SUBMITTED", "NEED_MORE_EVIDENCE", "REVIEW")),
         )
     )
     if active is not None:
-        raise HTTPException(status_code=409, detail="Another quest is already active — finish it first")
+        raise HTTPException(status_code=409, detail="Quest is already active")
     completed_today = await session.scalar(
         select(PlayerQuest.id).where(
             PlayerQuest.player_id == player_id,

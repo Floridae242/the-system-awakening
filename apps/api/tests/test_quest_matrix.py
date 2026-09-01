@@ -110,13 +110,23 @@ class TestAccept:
             conflict = _accept(client, headers, "quest_journal_001", "mx-a5-key-1")
             assert conflict.status_code == 409
 
-    def test_second_active_quest_rejected(self):
+    def test_same_definition_double_accept_rejected(self):
         with TestClient(app) as client:
             headers, _ = _register(client, "a6")
             _accept(client, headers, "quest_focus_001", "mx-a6-key-1")
-            other = _accept(client, headers, "quest_journal_001", "mx-a6-key-2")
-            assert other.status_code == 409
-            assert "already active" in other.json()["detail"]
+            same = _accept(client, headers, "quest_focus_001", "mx-a6-key-2")
+            assert same.status_code == 409
+            assert "already active" in same.json()["detail"]
+
+    def test_parallel_active_of_different_quests_allowed(self):
+        # Daily board (§97) implies multiple quests per day — accepted sequentially
+        # OR in parallel; the concurrency gate depends on parallel acceptance.
+        with TestClient(app) as client:
+            headers, _ = _register(client, "a6b")
+            first = _accept(client, headers, "quest_focus_001", "mx-a6b-key-1")
+            second = _accept(client, headers, "quest_journal_001", "mx-a6b-key-2")
+            assert first.status_code == 201
+            assert second.status_code == 201
 
     def test_completed_quest_does_not_block_other_quests(self):
         with TestClient(app) as client:
