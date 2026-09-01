@@ -1,10 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from sqlalchemy import (
     JSON,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -51,6 +52,7 @@ class PlayerProfile(Base):
     int_stat: Mapped[int] = mapped_column(Integer, default=10)
     wil: Mapped[int] = mapped_column(Integer, default=10)
     streak_days: Mapped[int] = mapped_column(Integer, default=0)
+    last_quest_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 

@@ -2,7 +2,7 @@ import hashlib
 import json
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
@@ -100,6 +100,7 @@ def player_data(player: PlayerProfile) -> dict:
         "display_name": player.display_name,
         "level": player.level,
         "current_xp": player.current_xp,
+        "streak_days": player.streak_days,
         "stats": {
             "str": player.str_stat,
             "agi": player.agi,
@@ -543,7 +544,23 @@ async def settle_verified_submission(
     )
     accepted.status = "COMPLETED"
     accepted.completed_at = datetime.now(UTC)
+    update_daily_streak(player, datetime.now(UTC).date())
     return await evaluate_achievements(session, player)
+
+
+def update_daily_streak(player: PlayerProfile, today: date) -> None:
+    """Daily streak: same day keeps the streak, yesterday extends it, a gap resets to 1.
+
+    Deterministic per Game Rules; multi-quest days never inflate the counter.
+    """
+    last = player.last_quest_date
+    if last == today:
+        return
+    if last == today - timedelta(days=1):
+        player.streak_days += 1
+    else:
+        player.streak_days = 1
+    player.last_quest_date = today
 
 
 @router.post("/submissions/{submission_id}/verify")

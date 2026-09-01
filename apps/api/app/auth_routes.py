@@ -51,6 +51,7 @@ def player_data(player: PlayerProfile) -> dict:
         "display_name": player.display_name,
         "level": player.level,
         "current_xp": player.current_xp,
+            "streak_days": player.streak_days,
         "stats": {
             "str": player.str_stat,
             "agi": player.agi,

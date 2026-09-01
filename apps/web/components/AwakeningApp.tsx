@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { sfx, sfxMuted, sfxSetMuted } from "../lib/sfx";
 
 type Stats = { str: number; agi: number; vit: number; int: number; wil: number };
-type Player = { id: string; display_name: string; level: number; current_xp: number; stats: Stats };
+type Player = { id: string; display_name: string; level: number; current_xp: number; streak_days: number; stats: Stats };
 type Quest = {
   definition_id: string;
   title: string;
@@ -300,6 +300,7 @@ export function AwakeningApp() {
             <button type="button" role="tab" aria-selected={authMode === "account"} onClick={() => setAuthMode("account")}>Account</button>
             <button type="button" role="tab" aria-selected={authMode === "register"} onClick={() => setAuthMode("register")}>Register</button>
           </div>
+          <p className="legal-link"><a href="/legal">ข้อกำหนด · ความเป็นส่วนตัว · คำชี้แจงสุขภาพ</a></p>
           <form onSubmit={login}>
             {authMode === "demo" ? <>
               <label htmlFor="handle">Demo hunter name</label>
@@ -357,7 +358,10 @@ export function AwakeningApp() {
               {experience.percent}%
             </progress>
           </div>
-          <div className="stats">
+            <div className="streak-chip" aria-label={`Streak ${player.streak_days} วัน`}>
+              <span aria-hidden="true">🔥</span><strong>{player.streak_days}</strong><small>DAY STREAK</small>
+            </div>
+            <div className="stats">
             {stats.map(([key, label]) => <div key={key}><span>{label}</span><strong>{player.stats[key]}</strong></div>)}
           </div>
           <h3>INVENTORY · {inventory.length}</h3>
